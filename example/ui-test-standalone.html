@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { background: #0a0a0a; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var DotartUI = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // packages/ui/src/index.ts
+  var index_exports = {};
+  __export(index_exports, {
+    BORDERS: () => BORDERS,
+    clearGrid: () => clearGrid,
+    clearRegion: () => clearRegion,
+    createEventSystem: () => createEventSystem,
+    createGrid: () => createGrid,
+    createLoop: () => createLoop,
+    drawBox: () => drawBox,
+    drawFill: () => drawFill,
+    drawImage: () => drawImage,
+    drawText: () => drawText,
+    getCell: () => getCell,
+    measureChar: () => measureChar,
+    mountGrid: () => mountGrid,
+    renderToString: () => renderToString,
+    setCell: () => setCell
+  });
+
+  // packages/ui/src/grid.ts
+  var DEFAULT_CELL = { char: " ", fg: "#ffffff", bg: "" };
+  function createGrid(cols, rows) {
+    const cells = [];
+    for (let y = 0; y < rows; y++) {
+      const row = [];
+      for (let x = 0; x < cols; x++) {
+        row.push({ ...DEFAULT_CELL });
+      }
+      cells.push(row);
+    }
+    return { cols, rows, cells, dirty: true };
+  }
+  function setCell(grid, x, y, cell) {
+    if (x < 0 || x >= grid.cols || y < 0 || y >= grid.rows) return;
+    const existing = grid.cells[y][x];
+    if (cell.char !== void 0) existing.char = cell.char;
+    if (cell.fg !== void 0) existing.fg = cell.fg;
+    if (cell.bg !== void 0) existing.bg = cell.bg;
+    grid.dirty = true;
+  }
+  function getCell(grid, x, y) {
+    if (x < 0 || x >= grid.cols || y < 0 || y >= grid.rows) return null;
+    return grid.cells[y][x];
+  }
+  function clearGrid(grid, fill) {
+    const char = fill?.char ?? " ";
+    const fg = fill?.fg ?? "#ffffff";
+    const bg = fill?.bg ?? "";
+    for (let y = 0; y < grid.rows; y++) {
+      for (let x = 0; x < grid.cols; x++) {
+        grid.cells[y][x] = { char, fg, bg };
+      }
+    }
+    grid.dirty = true;
+  }
+  function clearRegion(grid, x, y, w, h, fill) {
+    const char = fill?.char ?? " ";
+    const fg = fill?.fg ?? "#ffffff";
+    const bg = fill?.bg ?? "";
+    for (let row = y; row < y + h && row < grid.rows; row++) {
+      for (let col = x; col < x + w && col < grid.cols; col++) {
+        if (col >= 0 && row >= 0) {
+          grid.cells[row][col] = { char, fg, bg };
+        }
+      }
+    }
+    grid.dirty = true;
+  }
+
+  // packages/ui/src/draw.ts
+  var BORDERS = {
+    single: { tl: "\u256D", tr: "\u256E", bl: "\u2570", br: "\u256F", h: "\u2500", v: "\u2502" },
+    double: { tl: "\u2554", tr: "\u2557", bl: "\u255A", br: "\u255D", h: "\u2550", v: "\u2551" },
+    heavy: { tl: "\u250F", tr: "\u2513", bl: "\u2517", br: "\u251B", h: "\u2501", v: "\u2503" },
+    dashed: { tl: "\u256D", tr: "\u256E", bl: "\u2570", br: "\u256F", h: "\u254C", v: "\u254E" },
+    none: { tl: " ", tr: " ", bl: " ", br: " ", h: " ", v: " " }
+  };
+  function drawBox(grid, x, y, w, h, style) {
+    const fg = style?.fg ?? "#ffffff";
+    const bg = style?.bg ?? "";
+    const fillChar = style?.fill ?? " ";
+    let border;
+    if (!style?.border || style.border === "single") {
+      border = BORDERS.single;
+    } else if (typeof style.border === "string") {
+      border = BORDERS[style.border];
+    } else {
+      border = style.border;
+    }
+    if (w > 2 && h > 2) {
+      clearRegion(grid, x + 1, y + 1, w - 2, h - 2, { char: fillChar, fg, bg });
+    }
+    setCell(grid, x, y, { char: border.tl, fg, bg });
+    setCell(grid, x + w - 1, y, { char: border.tr, fg, bg });
+    setCell(grid, x, y + h - 1, { char: border.bl, fg, bg });
+    setCell(grid, x + w - 1, y + h - 1, { char: border.br, fg, bg });
+    for (let col = x + 1; col < x + w - 1; col++) {
+      setCell(grid, col, y, { char: border.h, fg, bg });
+      setCell(grid, col, y + h - 1, { char: border.h, fg, bg });
+    }
+    for (let row = y + 1; row < y + h - 1; row++) {
+      setCell(grid, x, row, { char: border.v, fg, bg });
+      setCell(grid, x + w - 1, row, { char: border.v, fg, bg });
+    }
+  }
+  function drawText(grid, x, y, text, style) {
+    const fg = style?.fg ?? "#ffffff";
+    const bg = style?.bg ?? "";
+    const width = style?.width;
+    const align = style?.align ?? "left";
+    let str = text;
+    if (width !== void 0) {
+      if (str.length > width) {
+        str = str.slice(0, width);
+      } else if (str.length < width) {
+        const pad = width - str.length;
+        if (align === "center") {
+          const left = Math.floor(pad / 2);
+          const right = pad - left;
+          str = " ".repeat(left) + str + " ".repeat(right);
+        } else if (align === "right") {
+          str = " ".repeat(pad) + str;
+        } else {
+          str = str + " ".repeat(pad);
+        }
+      }
+    }
+    for (let i = 0; i < str.length; i++) {
+      setCell(grid, x + i, y, { char: str[i], fg, bg });
+    }
+  }
+  function drawFill(grid, x, y, w, h, char, fg, bg) {
+    for (let row = y; row < y + h; row++) {
+      for (let col = x; col < x + w; col++) {
+        setCell(grid, col, row, { char, fg: fg ?? "#ffffff", bg: bg ?? "" });
+      }
+    }
+  }
+  function drawImage(grid, x, y, cells, cols) {
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i];
+      const cx = x + i % cols;
+      const cy = y + Math.floor(i / cols);
+      const fg = "#" + cell.r.toString(16).padStart(2, "0") + cell.g.toString(16).padStart(2, "0") + cell.b.toString(16).padStart(2, "0");
+      setCell(grid, cx, cy, { char: cell.char, fg });
+    }
+  }
+
+  // packages/ui/src/renderer.ts
+  function renderToString(grid) {
+    const rows = [];
+    for (let y = 0; y < grid.rows; y++) {
+      let html = "";
+      let i = 0;
+      while (i < grid.cols) {
+        const cell = grid.cells[y][i];
+        const fg = cell.fg;
+        const bg = cell.bg;
+        let j = i + 1;
+        while (j < grid.cols) {
+          const next = grid.cells[y][j];
+          if (next.fg !== fg || next.bg !== bg) break;
+          j++;
+        }
+        let text = "";
+        for (let k = i; k < j; k++) {
+          text += grid.cells[y][k].char;
+        }
+        text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        let style = `color:${fg}`;
+        if (bg) style += `;background:${bg}`;
+        html += `<span style="${style}">${text}</span>`;
+        i = j;
+      }
+      rows.push(html);
+    }
+    grid.dirty = false;
+    return rows.join("\n");
+  }
+  function measureChar(el) {
+    const span = document.createElement("span");
+    span.textContent = "A";
+    span.style.position = "absolute";
+    span.style.visibility = "hidden";
+    el.appendChild(span);
+    const rect = span.getBoundingClientRect();
+    el.removeChild(span);
+    return { w: rect.width, h: rect.height };
+  }
+
+  // packages/ui/src/events.ts
+  var nextId = 0;
+  function createEventSystem(pre, charW, charH) {
+    const handlers = /* @__PURE__ */ new Map();
+    function hitTest(cx, cy, h) {
+      return cx >= h.x && cx < h.x + h.w && cy >= h.y && cy < h.y + h.h;
+    }
+    function onMouseMove(e) {
+      const rect = pre.getBoundingClientRect();
+      const cx = Math.floor((e.clientX - rect.left) / charW);
+      const cy = Math.floor((e.clientY - rect.top) / charH);
+      for (const h of handlers.values()) {
+        const inside = hitTest(cx, cy, h);
+        if (h.type === "hover" && inside && !h.active) {
+          h.active = true;
+          h.fn();
+        } else if (h.type === "leave" && !inside && h.active) {
+          h.active = false;
+          h.fn();
+        } else if (h.type === "hover" && inside) {
+        } else if (h.type === "leave" && inside && !h.active) {
+          h.active = true;
+        }
+      }
+    }
+    function onClick(e) {
+      const rect = pre.getBoundingClientRect();
+      const cx = Math.floor((e.clientX - rect.left) / charW);
+      const cy = Math.floor((e.clientY - rect.top) / charH);
+      for (const h of handlers.values()) {
+        if (h.type === "click" && hitTest(cx, cy, h)) {
+          h.fn();
+        }
+      }
+    }
+    function onMouseLeave(_e) {
+      for (const h of handlers.values()) {
+        if (h.type === "leave" && h.active) {
+          h.active = false;
+          h.fn();
+        }
+      }
+    }
+    pre.addEventListener("mousemove", onMouseMove);
+    pre.addEventListener("click", onClick);
+    pre.addEventListener("mouseleave", onMouseLeave);
+    return {
+      on(type, x, y, w, h, fn) {
+        const id = `evt-${nextId++}`;
+        handlers.set(id, { id, type, x, y, w, h, fn, active: false });
+        return id;
+      },
+      off(id) {
+        handlers.delete(id);
+      },
+      destroy() {
+        pre.removeEventListener("mousemove", onMouseMove);
+        pre.removeEventListener("click", onClick);
+        pre.removeEventListener("mouseleave", onMouseLeave);
+        handlers.clear();
+      }
+    };
+  }
+
+  // packages/ui/src/animate.ts
+  function createLoop(fps, fn) {
+    const interval = 1e3 / fps;
+    let lastTime = -1;
+    let rafId = 0;
+    let running = true;
+    function tick(now) {
+      if (!running) return;
+      rafId = requestAnimationFrame(tick);
+      if (lastTime < 0) {
+        lastTime = now;
+        return;
+      }
+      const elapsed = now - lastTime;
+      if (elapsed >= interval) {
+        const dt = elapsed / 1e3;
+        lastTime = now - elapsed % interval;
+        fn(dt);
+      }
+    }
+    rafId = requestAnimationFrame(tick);
+    return {
+      stop() {
+        running = false;
+        cancelAnimationFrame(rafId);
+      }
+    };
+  }
+
+  // packages/ui/src/index.ts
+  function mountGrid(grid, element, opts) {
+    const fontSize = opts?.fontSize ?? 13;
+    const pre = document.createElement("pre");
+    pre.style.fontFamily = "monospace";
+    pre.style.fontSize = `${fontSize}px`;
+    pre.style.lineHeight = "1.0";
+    pre.style.whiteSpace = "pre";
+    pre.style.letterSpacing = "0";
+    pre.style.margin = "0";
+    pre.style.padding = "0";
+    pre.style.cursor = "default";
+    element.appendChild(pre);
+    const { w: charW, h: charH } = measureChar(pre);
+    const events = createEventSystem(pre, charW, charH);
+    const loops = [];
+    return {
+      update() {
+        pre.innerHTML = renderToString(grid);
+      },
+      on(type, x, y, w, h, fn) {
+        return events.on(type, x, y, w, h, fn);
+      },
+      off(id) {
+        events.off(id);
+      },
+      loop(fps, fn) {
+        const handle = createLoop(fps, fn);
+        loops.push(handle);
+        return handle;
+      },
+      destroy() {
+        for (const l of loops) l.stop();
+        events.destroy();
+        element.removeChild(pre);
+      }
+    };
+  }
+  return __toCommonJS(index_exports);
+})();
+</script>
+<script>
+  const { createGrid, drawBox, drawText, mountGrid, setCell, clearRegion } = DotartUI
+
+  const grid = createGrid(60, 20)
+
+  drawBox(grid, 0, 0, 60, 20, { border: 'double', fg: '#444' })
+  drawBox(grid, 2, 2, 26, 16, { border: 'single', fg: '#666', fill: '░', bg: '#111' })
+  drawBox(grid, 30, 2, 28, 7, { border: 'single', fg: '#666' })
+  drawBox(grid, 30, 11, 28, 7, { border: 'single', fg: '#666' })
+
+  drawText(grid, 32, 4, 'dotart ui', { fg: '#facc15' })
+  drawText(grid, 32, 5, 'ascii grid engine', { fg: '#666' })
+  drawText(grid, 32, 13, 'hover the boxes', { fg: '#888' })
+
+  const mounted = mountGrid(grid, document.getElementById('root'))
+  mounted.update()
+
+  mounted.on('hover', 30, 2, 28, 7, () => {
+    clearRegion(grid, 30, 2, 28, 7)
+    drawBox(grid, 30, 2, 28, 7, { border: 'heavy', fg: '#facc15' })
+    drawText(grid, 32, 4, 'dotart ui', { fg: '#facc15' })
+    drawText(grid, 32, 5, 'ascii grid engine', { fg: '#888' })
+    mounted.update()
+  })
+
+  mounted.on('leave', 30, 2, 28, 7, () => {
+    // clear region first, then redraw
+    clearRegion(grid, 30, 2, 28, 7)
+    drawBox(grid, 30, 2, 28, 7, { border: 'single', fg: '#666' })
+    drawText(grid, 32, 4, 'dotart ui', { fg: '#facc15' })
+    drawText(grid, 32, 5, 'ascii grid engine', { fg: '#666' })
+    mounted.update()
+  })
+
+  const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
+  let f = 0
+  mounted.loop(12, () => {
+    f = (f + 1) % frames.length
+    setCell(grid, 58, 18, { char: frames[f], fg: '#666' })
+    mounted.update()
+  })
+</script>
+</body>
+</html>

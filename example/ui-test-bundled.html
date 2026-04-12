@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { background: #0a0a0a; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+  import { createGrid, drawBox, drawText, mountGrid, setCell } from './ui-bundle.js'
+
+  const grid = createGrid(60, 20)
+
+  drawBox(grid, 0, 0, 60, 20, { border: 'double', fg: '#444' })
+  drawBox(grid, 2, 2, 26, 16, { border: 'single', fg: '#666', fill: '░', bg: '#111' })
+  drawBox(grid, 30, 2, 28, 7, { border: 'single', fg: '#666' })
+  drawBox(grid, 30, 11, 28, 7, { border: 'single', fg: '#666' })
+
+  drawText(grid, 32, 4, 'dotart ui', { fg: '#facc15' })
+  drawText(grid, 32, 5, 'ascii grid engine', { fg: '#666' })
+  drawText(grid, 32, 13, 'hover the boxes', { fg: '#888' })
+
+  const mounted = mountGrid(grid, document.getElementById('root'))
+  mounted.update()
+
+  mounted.on('hover', 30, 2, 28, 7, () => {
+    drawBox(grid, 30, 2, 28, 7, { border: 'heavy', fg: '#facc15' })
+    drawText(grid, 32, 4, 'dotart ui', { fg: '#facc15' })
+    mounted.update()
+  })
+
+  mounted.on('leave', 30, 2, 28, 7, () => {
+    drawBox(grid, 30, 2, 28, 7, { border: 'single', fg: '#666' })
+    drawText(grid, 32, 4, 'dotart ui', { fg: '#facc15' })
+    mounted.update()
+  })
+
+  // braille spinner animation
+  const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
+  let f = 0
+  mounted.loop(12, () => {
+    f = (f + 1) % frames.length
+    setCell(grid, 58, 18, { char: frames[f], fg: '#666' })
+    mounted.update()
+  })
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; }
+  body { background: #080808; display: flex; align-items: center; justify-content: center; height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import {
+  createGrid, setCell, clearRegion,
+  drawBox, drawText, drawFill,
+  mountGrid, BORDERS
+} from './ui-bundle.js'
+
+const COLS = 40
+const ROWS = 20
+const grid = createGrid(COLS, ROWS)
+
+// outer box
+drawBox(grid, 0, 0, COLS, ROWS, { border: 'double', fg: '#333' })
+
+// button 1 — click test
+drawBox(grid, 5, 3, 12, 3, { border: 'single', fg: '#555' })
+drawText(grid, 7, 4, 'CLICK ME', { fg: '#888' })
+
+// button 2 — hover test  
+drawBox(grid, 5, 8, 12, 3, { border: 'single', fg: '#555' })
+drawText(grid, 7, 9, 'HOVER ME', { fg: '#888' })
+
+// status display
+drawText(grid, 5, 14, 'status: idle', { fg: '#333' })
+
+// counter
+drawText(grid, 5, 16, 'clicks: 0', { fg: '#333' })
+
+// spinner
+drawText(grid, 35, 18, '⠋', { fg: '#333' })
+
+const mounted = mountGrid(grid, document.getElementById('root'), { fontSize: 14 })
+mounted.update()
+
+// click handler
+let clicks = 0
+mounted.on('click', 5, 3, 12, 3, () => {
+  clicks++
+  clearRegion(grid, 5, 14, 30, 1)
+  drawText(grid, 5, 14, 'status: clicked!', { fg: '#facc15' })
+  clearRegion(grid, 5, 16, 20, 1)
+  drawText(grid, 5, 16, `clicks: ${clicks}`, { fg: '#facc15' })
+  mounted.update()
+})
+
+// hover handler
+mounted.on('hover', 5, 8, 12, 3, () => {
+  clearRegion(grid, 5, 8, 12, 3)
+  drawBox(grid, 5, 8, 12, 3, { border: 'heavy', fg: '#facc15' })
+  drawText(grid, 7, 9, 'HOVER ME', { fg: '#facc15' })
+  clearRegion(grid, 5, 14, 30, 1)
+  drawText(grid, 5, 14, 'status: hovering', { fg: '#888' })
+  mounted.update()
+})
+
+mounted.on('leave', 5, 8, 12, 3, () => {
+  clearRegion(grid, 5, 8, 12, 3)
+  drawBox(grid, 5, 8, 12, 3, { border: 'single', fg: '#555' })
+  drawText(grid, 7, 9, 'HOVER ME', { fg: '#888' })
+  clearRegion(grid, 5, 14, 30, 1)
+  drawText(grid, 5, 14, 'status: idle', { fg: '#333' })
+  mounted.update()
+})
+
+// spinner animation
+const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
+let f = 0
+mounted.loop(12, () => {
+  f = (f + 1) % frames.length
+  setCell(grid, 35, 18, { char: frames[f], fg: '#444' })
+  mounted.update()
+})
+</script>
+</body>
+</html>

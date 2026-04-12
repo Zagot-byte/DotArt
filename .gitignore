@@ -1,0 +1,30 @@
+# Rust / WASM
+packages/core/target/
+packages/core/pkg/
+
+# Node
+node_modules/
+.pnpm-store/
+
+# Build outputs
+example/ui-bundle.js
+dist/
+
+# Env
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Python (mayz)
+__pycache__/
+*.pyc
+.venv/
+
+# Temp
+*.tmp

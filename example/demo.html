@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dotart-ui</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #080808;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+  }
+  #root {}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="module">
+import {
+  createGrid, setCell, clearRegion,
+  drawBox, drawText, drawFill,
+  mountGrid, BORDERS
+} from './ui-bundle.js'
+
+const COLS = 80
+const ROWS = 26
+const grid = createGrid(COLS, ROWS)
+
+// ── outer shell ──────────────────────────────────────────────────────────────
+drawBox(grid, 0, 0, COLS, ROWS, { border: 'double', fg: '#2a2a2a' })
+
+// ── left panel — album art placeholder ──────────────────────────────────────
+drawBox(grid, 1, 1, 26, ROWS - 2, { border: 'single', fg: '#1f1f1f', fill: ' ' })
+
+// braille art fill — simulate album art
+const brailleChars = '⠿⠾⠽⠼⠻⠺⠹⠸⠷⠶⠵⠴⠳⠲⠱⠰⠯⠮⠭⠬⠫⠪⠩⠨⠧⠦⠥⠤⠣⠢⠡⠠⠟⠞⠝⠜⠛⠚⠙⠘⠗⠖⠕⠔⠓⠒⠑⠐⠏⠎⠍⠌⠋⠊⠉⠈'
+const artColors = ['#1a1a2e','#16213e','#0f3460','#533483','#e94560','#0f3460','#533483']
+
+for (let y = 2; y < ROWS - 3; y++) {
+  for (let x = 2; x < 26; x++) {
+    const ci = Math.floor((x * 7 + y * 13) % brailleChars.length)
+    const col = artColors[Math.floor((x + y * 3) % artColors.length)]
+    const bright = Math.sin(x * 0.3 + y * 0.5) * 0.5 + 0.5
+    setCell(grid, x, y, {
+      char: brailleChars[ci],
+      fg: col,
+    })
+  }
+}
+
+// album art border glow
+drawBox(grid, 1, 1, 26, ROWS - 2, { border: 'single', fg: '#333' })
+
+// ── right panel — player ─────────────────────────────────────────────────────
+drawBox(grid, 27, 1, COLS - 28, ROWS - 2, { border: 'none', fill: ' ' })
+
+// track info
+drawText(grid, 29, 3, 'SYNTHWAVE COLLECTIVE', { fg: '#444' })
+drawText(grid, 29, 5, 'Neon Drift', { fg: '#facc15' })
+drawText(grid, 29, 6, 'Chromatic Waves  ·  2024', { fg: '#555' })
+
+// divider
+drawFill(grid, 29, 8, COLS - 31, 1, '─', '#222')
+
+// progress bar
+const totalW = COLS - 33
+const progress = 0.37
+const filled = Math.floor(totalW * progress)
+
+drawText(grid, 29, 10, '2:14', { fg: '#555' })
+drawText(grid, 29 + totalW + 2, 10, '6:02', { fg: '#555' })
+
+for (let i = 0; i < totalW; i++) {
+  const x = 34 + i
+  if (i < filled) {
+    setCell(grid, x, 10, { char: '━', fg: '#facc15' })
+  } else if (i === filled) {
+    setCell(grid, x, 10, { char: '●', fg: '#facc15' })
+  } else {
+    setCell(grid, x, 10, { char: '─', fg: '#2a2a2a' })
+  }
+}
+
+// controls
+const controls = [
+  { char: '⟨⟨', label: 'prev', x: 31 },
+  { char: '▶', label: 'play', x: 38 },
+  { char: '⟩⟩', label: 'next', x: 44 },
+  { char: '⇄', label: 'shuf', x: 52 },
+  { char: '↻', label: 'rep',  x: 57 },
+]
+
+for (const c of controls) {
+  drawText(grid, c.x, 13, c.char, { fg: '#555' })
+}
+
+// volume
+drawText(grid, 29, 16, 'VOL', { fg: '#333' })
+const volW = 20
+const volLevel = 0.72
+for (let i = 0; i < volW; i++) {
+  const x = 34 + i
+  setCell(grid, x, 16, {
+    char: i < Math.floor(volW * volLevel) ? '▰' : '▱',
+    fg: i < Math.floor(volW * volLevel) ? '#3a3a3a' : '#1f1f1f'
+  })
+}
+
+// waveform area
+drawFill(grid, 29, 18, COLS - 31, 1, '─', '#1a1a1a')
+drawText(grid, 29, 18, ' WAVEFORM ', { fg: '#222' })
+
+// static waveform
+const waveW = COLS - 31
+const waveChars = '⣀⣤⣶⣿⣶⣤⣀'
+for (let i = 0; i < waveW; i++) {
+  const x = 29 + i
+  const t = i / waveW
+  const wave1 = Math.sin(t * Math.PI * 8) * 0.5 + 0.5
+  const wave2 = Math.sin(t * Math.PI * 13 + 1) * 0.3 + 0.5
+  const combined = (wave1 + wave2) / 2
+  const ci = Math.floor(combined * (waveChars.length - 1))
+  const brightness = Math.floor(combined * 180 + 40)
+  setCell(grid, x, 19, {
+    char: waveChars[ci],
+    fg: `rgb(${brightness},${Math.floor(brightness*0.85)},${Math.floor(brightness*0.3)})`
+  })
+}
+
+// queue
+drawFill(grid, 29, 21, COLS - 31, 1, '─', '#1a1a1a')
+drawText(grid, 29, 21, ' UP NEXT ', { fg: '#222' })
+
+const queue = [
+  { title: 'Midnight Protocol', artist: 'Synthwave Collective', dur: '5:44' },
+  { title: 'Binary Sunset',     artist: 'Neon Circuit',         dur: '4:21' },
+  { title: 'Grid World',        artist: 'Terminal Ghost',        dur: '6:11' },
+]
+
+for (let i = 0; i < queue.length; i++) {
+  const y = 22 + i
+  const track = queue[i]
+  drawText(grid, 29, y, `${i+1}`, { fg: '#333' })
+  drawText(grid, 31, y, track.title, { fg: '#555' })
+  drawText(grid, COLS - 8, y, track.dur, { fg: '#333' })
+}
+
+// status bar
+drawFill(grid, 1, ROWS - 2, COLS - 2, 1, ' ', '#0f0f0f')
+drawText(grid, 3, ROWS - 2, 'FLAC  44.1kHz  16bit', { fg: '#2a2a2a' })
+drawText(grid, COLS - 20, ROWS - 2, 'dotart-ui  v0.1.0', { fg: '#1f1f1f' })
+
+// ── mount ─────────────────────────────────────────────────────────────────────
+const mounted = mountGrid(grid, document.getElementById('root'), { fontSize: 14 })
+mounted.update()
+
+// ── animate waveform ──────────────────────────────────────────────────────────
+let phase = 0
+let playActive = false
+
+mounted.loop(30, (dt) => {
+  phase += dt * 2.5
+
+  // animated waveform
+  for (let i = 0; i < waveW; i++) {
+    const x = 29 + i
+    const t = i / waveW
+    const wave1 = Math.sin(t * Math.PI * 8 + phase) * 0.5 + 0.5
+    const wave2 = Math.sin(t * Math.PI * 13 + phase * 1.3) * 0.3 + 0.5
+    const combined = (wave1 + wave2) / 2
+    const ci = Math.floor(combined * (waveChars.length - 1))
+    const brightness = Math.floor(combined * 180 + 40)
+    setCell(grid, x, 19, {
+      char: waveChars[ci],
+      fg: `rgb(${brightness},${Math.floor(brightness*0.85)},${Math.floor(brightness*0.3)})`
+    })
+  }
+
+  // progress tick
+  const elapsed = (phase / (Math.PI * 2)) * 4
+  const prog = (elapsed % 1) * 0.4 + 0.3
+  const f = Math.floor(totalW * prog)
+  for (let i = 0; i < totalW; i++) {
+    const x = 34 + i
+    if (i < f) {
+      setCell(grid, x, 10, { char: '━', fg: '#facc15' })
+    } else if (i === f) {
+      setCell(grid, x, 10, { char: '●', fg: '#facc15' })
+    } else {
+      setCell(grid, x, 10, { char: '─', fg: '#2a2a2a' })
+    }
+  }
+
+  mounted.update()
+})
+
+// ── hover interactions ────────────────────────────────────────────────────────
+// play button
+mounted.on('hover', 38, 13, 2, 1, () => {
+  drawText(grid, 38, 13, '▶', { fg: '#facc15' })
+  mounted.update()
+})
+mounted.on('leave', 38, 13, 2, 1, () => {
+  drawText(grid, 38, 13, '▶', { fg: '#555' })
+  mounted.update()
+})
+
+// prev
+mounted.on('hover', 31, 13, 4, 1, () => {
+  drawText(grid, 31, 13, '⟨⟨', { fg: '#888' })
+  mounted.update()
+})
+mounted.on('leave', 31, 13, 4, 1, () => {
+  drawText(grid, 31, 13, '⟨⟨', { fg: '#555' })
+  mounted.update()
+})
+
+// next
+mounted.on('hover', 44, 13, 4, 1, () => {
+  drawText(grid, 44, 13, '⟩⟩', { fg: '#888' })
+  mounted.update()
+})
+mounted.on('leave', 44, 13, 4, 1, () => {
+  drawText(grid, 44, 13, '⟩⟩', { fg: '#555' })
+  mounted.update()
+})
+
+// queue rows
+for (let i = 0; i < queue.length; i++) {
+  const y = 22 + i
+  const track = queue[i]
+  mounted.on('hover', 29, y, COLS - 31, 1, () => {
+    clearRegion(grid, 29, y, COLS - 31, 1)
+    drawText(grid, 29, y, `${i+1}`, { fg: '#facc15' })
+    drawText(grid, 31, y, track.title, { fg: '#facc15' })
+    drawText(grid, COLS - 8, y, track.dur, { fg: '#facc15' })
+    mounted.update()
+  })
+  mounted.on('leave', 29, y, COLS - 31, 1, () => {
+    clearRegion(grid, 29, y, COLS - 31, 1)
+    drawText(grid, 29, y, `${i+1}`, { fg: '#333' })
+    drawText(grid, 31, y, track.title, { fg: '#555' })
+    drawText(grid, COLS - 8, y, track.dur, { fg: '#333' })
+    mounted.update()
+  })
+}
+
+// --- click test ---
+mounted.on('click', 0, 0, COLS, ROWS, () => {
+  drawText(grid, 3, ROWS - 2, 'CLICKED!', { fg: '#facc15' })
+  mounted.update()
+})
+</script>
+</body>
+</html>
