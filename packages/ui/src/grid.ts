@@ -11,6 +11,13 @@ export interface Grid {
   dirty: boolean
 }
 
+export interface TextStyle {
+  fg?: string
+  bg?: string
+  align?: 'left' | 'center' | 'right'
+  width?: number
+}
+
 const DEFAULT_CELL: Cell = { char: ' ', fg: '#ffffff', bg: '' }
 
 export function createGrid(cols: number, rows: number): Grid {

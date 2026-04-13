@@ -12,7 +12,8 @@
 import {
   createGrid, setCell, clearRegion,
   drawBox, drawText, drawFill,
-  mountGrid, BORDERS
+  mountGrid, BORDERS,
+  createTextInput, createLayer, toggleLayer, composeLayers, drawModal, createKeyNav
 } from './ui-bundle.js'
 
 const COLS = 40
@@ -78,6 +79,41 @@ let f = 0
 mounted.loop(12, () => {
   f = (f + 1) % frames.length
   setCell(grid, 35, 18, { char: frames[f], fg: '#444' })
+  mounted.update()
+})
+
+// test text input
+const inputHandle = createTextInput(grid, mounted, 5, 16, 20, {
+  placeholder: 'type here...',
+  fg: '#fff',
+  onChange: (v) => {
+    drawText(grid, 5, 17, `value: ${v}`.padEnd(25), { fg: '#444' })
+    mounted.update()
+  },
+  onSubmit: (v) => {
+    drawText(grid, 5, 18, `submitted: ${v}`.padEnd(25), { fg: '#facc15' })
+    mounted.update()
+  }
+})
+
+// test keyboard nav
+const nav = createKeyNav(mounted, {
+  up:     () => { drawText(grid, 5, 19, '^ UP pressed    ', { fg: '#4ade80' }); mounted.update() },
+  down:   () => { drawText(grid, 5, 19, 'v DOWN pressed  ', { fg: '#4ade80' }); mounted.update() },
+  enter:  () => { drawText(grid, 5, 19, '> ENTER pressed ', { fg: '#facc15' }); mounted.update() },
+  escape: () => { drawText(grid, 5, 19, 'x ESC pressed   ', { fg: '#f87171' }); mounted.update() },
+  tab:    () => { drawText(grid, 5, 19, '> TAB pressed   ', { fg: '#888' });    mounted.update() },
+})
+
+// test layers
+const modalLayer = createLayer(grid.cols, grid.rows, 10)
+drawModal(modalLayer, 'Alert', 'This is a modal on a higher layer. It composites on top of the base grid.', { borderFg: '#facc15' })
+
+mounted.on('click', 5, 3, 12, 3, () => {
+  toggleLayer(modalLayer)
+  const composed = composeLayers(grid, modalLayer)
+  // render composed grid -> override loop and regular update to use baseGrid ?
+  // the instruction says `mounted.update()`
   mounted.update()
 })
 </script>

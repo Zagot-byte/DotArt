@@ -47,7 +47,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           pattern: {
             type: 'string',
-            enum: ['player', 'dashboard', 'list', 'modal', 'form', 'animation'],
+            enum: ['player', 'dashboard', 'list', 'modal', 'input-form', 'animation'],
             description: 'Which pattern to get example code for',
           }
         },
@@ -140,6 +140,17 @@ import {
   .off(id)
   .loop(fps, fn(dt)) → {stop()}
   .destroy()
+
+## components & layers
+- createScrollable(grid, mounted, x, y, w, h, text, style?) → ScrollableHandle
+- createTextInput(grid, mounted, x, y, w, opts?) → TextInputHandle
+- createLayer(cols, rows, zIndex?) → Layer
+- composeLayers(base, ...layers) → Grid
+- showLayer(layer)
+- hideLayer(layer)
+- toggleLayer(layer)
+- drawModal(layer, title, content, opts?)
+- createKeyNav(mounted, handlers) → KeyNavHandle
 
 ## BORDERS
 single, double, heavy, dashed, none
@@ -348,55 +359,69 @@ stats.forEach((s, i) => {
 // sparklines
 const data = Array.from({length: 20}, () => Math.random() * 100)
 drawSparkline(grid, 2, 11, COLS-4, data, { fg: '#facc15' })
-\`\`\``,
+\`\`\`,
 
-        modal: `# modal overlay pattern
+        modal: `# modal pattern
 \`\`\`ts
-// since dotart has no z-layers, save/restore grid state
-let savedCells: {x:number,y:number,cell:Cell}[] = []
+// modal that appears over content
+const base = createGrid(80, 24)
+const modalLayer = createLayer(80, 24, 10)
+let modalVisible = false
 
-function openModal(title: string, message: string) {
-  // save cells we'll overwrite
-  savedCells = []
-  const mx = 20, my = 8, mw = 40, mh = 10
-  for (let y = my; y < my+mh; y++)
-    for (let x = mx; x < mx+mw; x++) {
-      const cell = getCell(grid, x, y)
-      if (cell) savedCells.push({x, y, cell: {...cell}})
+// draw base UI
+drawBox(base, 0, 0, 80, 24, { border: 'double', fg: '#333' })
+drawText(base, 2, 2, 'press M to open modal', { fg: '#555' })
+
+// draw modal content on layer
+drawModal(modalLayer, 'Confirm Delete', 
+  'This action cannot be undone. Are you sure you want to continue?',
+  { borderFg: '#f87171', fg: '#888' }
+)
+hideLayer(modalLayer)  // hidden by default
+
+const mounted = mountGrid(base, document.getElementById('root'))
+mounted.update()
+
+// toggle modal
+createKeyNav(mounted, {
+  char: (key) => {
+    if (key === 'm') {
+      modalVisible = !modalVisible
+      modalVisible ? showLayer(modalLayer) : hideLayer(modalLayer)
+      const composed = composeLayers(base, modalLayer)
+      // update pre directly
+      mounted.update()
     }
-  
-  // draw modal
-  drawBox(grid, mx, my, mw, mh, { border: 'double', fg: '#facc15', fill: ' ', bg: '#0d0d0d' })
-  centerText(grid, my+1, title, { fg: '#facc15' })
-  drawTextWrapped(grid, mx+2, my+3, mw-4, 3, message, { fg: '#888' })
-  drawText(grid, mx+mw-12, my+mh-2, '[ OK ]', { fg: '#facc15' })
-  
-  mounted.update()
-  
-  // close on click
-  return mounted.on('click', mx, my, mw, mh, closeModal)
-}
+  }
+})
+\`\`\`,
 
-function closeModal() {
-  for (const {x, y, cell} of savedCells) setCell(grid, x, y, cell)
-  mounted.update()
-}
-\`\`\``,
-
-        form: `# form pattern
+        'input-form': `# form with text inputs
 \`\`\`ts
-// dotart doesn't handle keyboard input natively
-// use a hidden <input> element and sync to grid
+// form with text inputs
+const nameInput = createTextInput(grid, mounted, 10, 5, 30, {
+  placeholder: 'Enter name...',
+  fg: '#fff',
+  onSubmit: (v) => {
+    drawText(grid, 10, 7, \`Hello, \${v}!\`, { fg: '#facc15' })
+    mounted.update()
+  }
+})
 
-let inputValue = ''
-const hiddenInput = document.createElement('input')
-hiddenInput.style.cssText = 'position:absolute;opacity:0;pointer-events:none'
-document.body.appendChild(hiddenInput)
+const searchInput = createTextInput(grid, mounted, 10, 9, 30, {
+  placeholder: 'Search...',
+  fg: '#fff',
+  onChange: (v) => {
+    // filter list live
+    renderFilteredList(v)
+    mounted.update()
+  }
+})
 
-function renderInput(x: number, y: number, w: number, value: string, focused: boolean) {
-  clearRegion(grid, x, y, w, 1)
-  const display = value.slice(-(w-2)).padEnd(w-2, ' ')
-  drawText(grid, x, y, '[', { fg: focused ? '#facc15' : '#444' })
+// click to focus
+mounted.on('click', 10, 5, 30, 1, () => nameInput.focus())
+mounted.on('click', 10, 9, 30, 1, () => searchInput.focus())
+\`\`\`,sed ? '#facc15' : '#444' })
   drawText(grid, x+1, y, display, { fg: '#ccc' })
   drawText(grid, x+w-1, y, ']', { fg: focused ? '#facc15' : '#444' })
   if (focused) setCell(grid, x+1+value.length, y, { char: '▌', fg: '#facc15' })
@@ -440,6 +465,18 @@ hiddenInput.addEventListener('input', () => {
       }
       if (code.includes('grid.cells[')) {
         issues.push('ERROR: never access grid.cells directly — use setCell() and getCell()')
+      }
+      if (code.includes('createTextInput') && !code.includes('.destroy()')) {
+        issues.push('WARNING: createTextInput creates a hidden DOM <input> — call .destroy() on cleanup to remove it')
+      }
+      if (code.includes('createKeyNav') && !code.includes('.destroy()')) {
+        issues.push('WARNING: createKeyNav attaches to window — call .destroy() to remove listener')
+      }
+      if (code.includes('createScrollable') && !code.includes('.destroy()')) {
+        issues.push('WARNING: createScrollable attaches wheel listener — call .destroy() on cleanup')
+      }
+      if (code.includes('composeLayers') && !code.includes('mountGrid')) {
+        issues.push('INFO: composeLayers returns a new Grid — you need to render it via mountGrid or manual update')
       }
 
       return {

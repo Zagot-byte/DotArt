@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>linear — dotart</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #080808;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import {
+  createGrid, setCell, clearRegion,
+  drawBox, drawText, drawFill,
+  mountGrid, BORDERS
+} from './ui-bundle.js'
+
+const COLS = 120
+const ROWS = 36
+const grid = createGrid(COLS, ROWS)
+
+// ── COLORS ────────────────────────────────────────────────────────────────────
+const C = {
+  bg:        '#080808',
+  border:    '#1a1a1a',
+  border2:   '#222',
+  dim:       '#2a2a2a',
+  muted:     '#444',
+  sub:       '#666',
+  text:      '#999',
+  bright:    '#ccc',
+  white:     '#eee',
+  yellow:    '#facc15',
+  purple:    '#a78bfa',
+  blue:      '#60a5fa',
+  green:     '#4ade80',
+  red:       '#f87171',
+  orange:    '#fb923c',
+  pink:      '#f472b6',
+}
+
+// ── SIDEBAR (0..17) ───────────────────────────────────────────────────────────
+drawFill(grid, 0, 0, 18, ROWS, ' ', C.muted, '#0a0a0a')
+
+// workspace header
+drawText(grid, 1, 1, '⬡ Linear', { fg: C.white })
+drawText(grid, 10, 1, '▾', { fg: C.muted })
+
+// nav items
+const navItems = [
+  { icon: '⊡', label: 'Inbox',      y: 3,  active: false, badge: '3' },
+  { icon: '◈', label: 'My Issues',  y: 4,  active: false },
+  { icon: '⊙', label: 'Reviews',    y: 5,  active: false },
+  { icon: '◉', label: 'Pulse',      y: 6,  active: false },
+]
+
+for (const item of navItems) {
+  drawText(grid, 1, item.y, `${item.icon} ${item.label}`, { fg: C.sub })
+  if (item.badge) {
+    drawText(grid, 14, item.y, item.badge, { fg: C.muted })
+  }
+}
+
+// section headers
+drawText(grid, 1, 8,  'WORKSPACE', { fg: C.dim })
+drawText(grid, 1, 9,  '⬡ Initiatives', { fg: C.sub })
+drawText(grid, 1, 10, '◻ Projects',    { fg: C.sub })
+drawText(grid, 1, 11, '⋯ More',        { fg: C.muted })
+
+drawText(grid, 1, 13, 'FAVORITES', { fg: C.dim })
+
+const teams = [
+  { icon: '▸', label: 'Faster app launch', y: 14, color: C.yellow },
+  { icon: '▸', label: 'Agent tasks',        y: 15, color: C.purple },
+  { icon: '▸', label: 'UI Refresh',         y: 16, color: C.blue },
+  { icon: '▸', label: 'Agent Insights',     y: 17, color: C.green },
+]
+
+for (const t of teams) {
+  drawText(grid, 1, t.y, `${t.icon} ${t.label}`, { fg: t.color })
+}
+
+drawText(grid, 1, 19, 'TEAMS', { fg: C.dim })
+drawText(grid, 1, 20, '◈ Engineering',  { fg: C.sub })
+drawText(grid, 1, 21, '◈ Design',       { fg: C.sub })
+drawText(grid, 1, 22, '◈ Product',      { fg: C.sub })
+
+// user footer
+drawFill(grid, 0, ROWS-3, 18, 1, '─', C.border)
+drawText(grid, 1, ROWS-2, '○ karri', { fg: C.sub })
+drawText(grid, 1, ROWS-1, '? Help', { fg: C.muted })
+
+// sidebar border
+drawFill(grid, 18, 0, 1, ROWS, '│', C.border)
+
+// ── ISSUE LIST (19..54) ───────────────────────────────────────────────────────
+drawFill(grid, 19, 0, 36, ROWS, ' ', C.text)
+
+// header
+drawText(grid, 20, 1, 'Engineering', { fg: C.white })
+drawText(grid, 33, 1, '▾ All Issues', { fg: C.muted })
+
+// toolbar
+drawText(grid, 20, 3, '⊞ Filter', { fg: C.muted })
+drawText(grid, 29, 3, '⊟ Display', { fg: C.muted })
+drawText(grid, 38, 3, '+ New Issue', { fg: C.muted })
+
+drawFill(grid, 19, 4, 36, 1, '─', C.border)
+
+// status groups
+const groups = [
+  { label: 'In Progress', icon: '◑', color: C.yellow, y: 5, count: 4 },
+  { label: 'Todo',        icon: '○', color: C.sub,    y: 15, count: 12 },
+  { label: 'Done',        icon: '●', color: C.green,  y: 25, count: 8 },
+]
+
+const issues = [
+  { id: 'ENG-2703', title: 'Faster app launch',        status: '◑', priority: '▲', label: 'Performance', y: 7,  active: true,  color: C.yellow },
+  { id: 'ENG-2698', title: 'Agent task queue system',  status: '◑', priority: '▲', label: 'Backend',     y: 8,  active: false, color: C.purple },
+  { id: 'ENG-2695', title: 'UI Refresh — nav sidebar', status: '◑', priority: '●', label: 'Design',      y: 9,  active: false, color: C.blue   },
+  { id: 'ENG-2689', title: 'Fix crash on iOS 17',      status: '◑', priority: '▲', label: 'Bug',         y: 10, active: false, color: C.red    },
+  { id: 'ENG-2701', title: 'Codex integration draft',  status: '○', priority: '○', label: 'AI',          y: 17, active: false, color: C.purple },
+  { id: 'ENG-2699', title: 'Dark mode tokens audit',   status: '○', priority: '●', label: 'Design',      y: 18, active: false, color: C.blue   },
+  { id: 'ENG-2697', title: 'Perf: reduce bundle size', status: '○', priority: '▲', label: 'Perf',        y: 19, active: false, color: C.orange },
+]
+
+for (const g of groups) {
+  drawText(grid, 20, g.y, `${g.icon} ${g.label}`, { fg: g.color })
+  drawText(grid, 34, g.y, `${g.count}`, { fg: C.muted })
+  drawFill(grid, 19, g.y + 1, 36, 1, '─', C.border)
+}
+
+let activeIssue = issues[0]
+
+function renderIssueList() {
+  for (const issue of issues) {
+    const isActive = issue === activeIssue
+    const bg = isActive ? '#111' : ''
+    clearRegion(grid, 19, issue.y, 36, 1)
+    if (isActive) drawFill(grid, 19, issue.y, 36, 1, ' ', C.text, '#111')
+    drawText(grid, 20, issue.y, issue.status, { fg: issue.color })
+    drawText(grid, 22, issue.y, issue.id, { fg: C.muted })
+    drawText(grid, 31, issue.y, issue.title.slice(0, 18), { fg: isActive ? C.white : C.bright })
+    drawText(grid, 50, issue.y, issue.label, { fg: issue.color })
+  }
+}
+
+renderIssueList()
+
+// list border
+drawFill(grid, 55, 0, 1, ROWS, '│', C.border)
+
+// ── DETAIL PANEL (56..119) ────────────────────────────────────────────────────
+function renderDetail(issue) {
+  clearRegion(grid, 56, 0, COLS - 56, ROWS)
+
+  // breadcrumb
+  drawText(grid, 57, 1, `Engineering › ${issue.id}`, { fg: C.muted })
+  drawText(grid, COLS - 8, 1, '✕ Close', { fg: C.muted })
+
+  drawFill(grid, 56, 2, COLS - 56, 1, '─', C.border)
+
+  // title
+  drawText(grid, 57, 4, issue.title, { fg: C.white })
+
+  // status row
+  drawText(grid, 57, 6, `${issue.status} In Progress`, { fg: C.yellow })
+  drawText(grid, 72, 6, `${issue.priority} High`, { fg: C.red })
+  drawText(grid, 82, 6, `◈ karri`, { fg: C.sub })
+  drawText(grid, 91, 6, `⊡ ${issue.label}`, { fg: issue.color })
+
+  drawFill(grid, 56, 7, COLS - 56, 1, '─', C.border)
+
+  // description
+  drawText(grid, 57, 9,  'Description', { fg: C.muted })
+  drawText(grid, 57, 11, 'Render UI before vehicle_state sync when minimum', { fg: C.text })
+  drawText(grid, 57, 12, 'required state is present, instead of blocking on', { fg: C.text })
+  drawText(grid, 57, 13, 'full refresh during iOS startup.', { fg: C.text })
+
+  drawFill(grid, 56, 15, COLS - 56, 1, '─', C.border)
+
+  // activity
+  drawText(grid, 57, 16, 'Activity', { fg: C.muted })
+
+  const activity = [
+    { who: '⬡ Linear',  msg: 'created issue via Slack on behalf of karri', time: '2min', color: C.purple },
+    { who: '◈ karri',   msg: 'Right now we show a spinner forever...',      time: '4min', color: C.blue   },
+    { who: '◈ jori',    msg: '@Codex can you take a stab at this?',         time: 'now',  color: C.green  },
+    { who: '⊡ Codex',   msg: 'Examining issue ENG-2703 ...',                time: 'now',  color: C.yellow },
+  ]
+
+  for (let i = 0; i < activity.length; i++) {
+    const a = activity[i]
+    const y = 18 + i * 3
+    drawText(grid, 57, y,   `${a.who}`, { fg: a.color })
+    drawText(grid, 57, y+1, a.msg.slice(0, 58), { fg: C.text })
+    drawText(grid, COLS - 6, y, a.time, { fg: C.muted })
+  }
+
+  drawFill(grid, 56, ROWS - 4, COLS - 56, 1, '─', C.border)
+
+  // comment input
+  drawFill(grid, 57, ROWS - 3, COLS - 58, 2, ' ', C.sub, '#0d0d0d')
+  drawBox(grid, 57, ROWS - 3, COLS - 58, 2, { border: 'single', fg: C.border2 })
+  drawText(grid, 59, ROWS - 2, 'Add comment...', { fg: C.muted })
+  drawText(grid, COLS - 10, ROWS - 2, '↵ Send', { fg: C.muted })
+
+  // right metadata panel
+  drawFill(grid, COLS - 18, 3, 1, ROWS - 7, '│', C.border)
+
+  const meta = [
+    { key: 'Status',   val: 'In Progress', color: C.yellow },
+    { key: 'Priority', val: 'High',        color: C.red    },
+    { key: 'Assignee', val: 'karri',       color: C.blue   },
+    { key: 'Label',    val: issue.label,   color: issue.color },
+    { key: 'Cycle',    val: 'Cycle 12',    color: C.sub    },
+    { key: 'Project',  val: 'Q2 Launch',   color: C.sub    },
+    { key: 'Due',      val: 'Apr 30',      color: C.orange },
+  ]
+
+  drawText(grid, COLS - 17, 4, 'Properties', { fg: C.muted })
+  drawFill(grid, COLS - 18, 5, 18, 1, '─', C.border)
+
+  for (let i = 0; i < meta.length; i++) {
+    const m = meta[i]
+    const y = 6 + i * 2
+    drawText(grid, COLS - 17, y,   m.key,  { fg: C.muted })
+    drawText(grid, COLS - 17, y+1, m.val,  { fg: m.color })
+  }
+}
+
+renderDetail(activeIssue)
+
+// ── MOUNT ─────────────────────────────────────────────────────────────────────
+const mounted = mountGrid(grid, document.getElementById('root'), { fontSize: 13 })
+mounted.update()
+
+// ── INTERACTIONS ─────────────────────────────────────────────────────────────
+// issue list hover + click
+for (const issue of issues) {
+  mounted.on('hover', 19, issue.y, 36, 1, () => {
+    if (issue === activeIssue) return
+    clearRegion(grid, 19, issue.y, 36, 1)
+    drawFill(grid, 19, issue.y, 36, 1, ' ', C.text, '#0e0e0e')
+    drawText(grid, 20, issue.y, issue.status, { fg: issue.color })
+    drawText(grid, 22, issue.y, issue.id, { fg: C.muted })
+    drawText(grid, 31, issue.y, issue.title.slice(0, 18), { fg: C.white })
+    drawText(grid, 50, issue.y, issue.label, { fg: issue.color })
+    mounted.update()
+  })
+
+  mounted.on('leave', 19, issue.y, 36, 1, () => {
+    if (issue === activeIssue) return
+    clearRegion(grid, 19, issue.y, 36, 1)
+    drawText(grid, 20, issue.y, issue.status, { fg: issue.color })
+    drawText(grid, 22, issue.y, issue.id, { fg: C.muted })
+    drawText(grid, 31, issue.y, issue.title.slice(0, 18), { fg: C.bright })
+    drawText(grid, 50, issue.y, issue.label, { fg: issue.color })
+    mounted.update()
+  })
+
+  mounted.on('click', 19, issue.y, 36, 1, () => {
+    const prev = activeIssue
+    activeIssue = issue
+    // deactivate previous
+    clearRegion(grid, 19, prev.y, 36, 1)
+    drawText(grid, 20, prev.y, prev.status, { fg: prev.color })
+    drawText(grid, 22, prev.y, prev.id, { fg: C.muted })
+    drawText(grid, 31, prev.y, prev.title.slice(0, 18), { fg: C.bright })
+    drawText(grid, 50, prev.y, prev.label, { fg: prev.color })
+    // activate new
+    clearRegion(grid, 19, issue.y, 36, 1)
+    drawFill(grid, 19, issue.y, 36, 1, ' ', C.text, '#111')
+    drawText(grid, 20, issue.y, issue.status, { fg: issue.color })
+    drawText(grid, 22, issue.y, issue.id, { fg: C.muted })
+    drawText(grid, 31, issue.y, issue.title.slice(0, 18), { fg: C.white })
+    drawText(grid, 50, issue.y, issue.label, { fg: issue.color })
+    // update detail
+    renderDetail(issue)
+    mounted.update()
+  })
+}
+
+// sidebar nav hover
+for (const item of navItems) {
+  mounted.on('hover', 0, item.y, 18, 1, () => {
+    clearRegion(grid, 0, item.y, 18, 1)
+    drawFill(grid, 0, item.y, 18, 1, ' ', C.text, '#111')
+    drawText(grid, 1, item.y, `${item.icon} ${item.label}`, { fg: C.white })
+    mounted.update()
+  })
+  mounted.on('leave', 0, item.y, 18, 1, () => {
+    clearRegion(grid, 0, item.y, 18, 1)
+    drawText(grid, 1, item.y, `${item.icon} ${item.label}`, { fg: C.sub })
+    mounted.update()
+  })
+}
+
+// ── SPINNER in status bar ─────────────────────────────────────────────────────
+const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
+let f = 0
+mounted.loop(12, () => {
+  f = (f + 1) % frames.length
+  setCell(grid, COLS - 2, ROWS - 1, { char: frames[f], fg: C.muted })
+  mounted.update()
+})
+</script>
+</body>
+</html>

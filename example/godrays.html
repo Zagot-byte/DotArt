@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>god rays — dotart</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import {
+  createGrid, setCell, clearGrid,
+  mountGrid
+} from './ui-bundle.js'
+
+const COLS = 80
+const ROWS = 36
+const grid = createGrid(COLS, ROWS)
+const mounted = mountGrid(grid, document.getElementById('root'), { fontSize: 13 })
+
+// center of the light source
+const CX = COLS / 2
+const CY = ROWS * 0.4
+
+// braille density chars — from sparse to dense
+const DENSE = ['⠀','⠁','⠃','⠇','⠿','⣿']
+const BLOCK  = [' ','░','▒','▓','█']
+
+// god ray beams — angle, width, intensity, phase offset
+const BEAMS = [
+  { angle: -0.3, width: 0.18, intensity: 1.0,  phase: 0.0  },
+  { angle:  0.1, width: 0.12, intensity: 0.85, phase: 0.3  },
+  { angle:  0.5, width: 0.20, intensity: 0.9,  phase: 0.7  },
+  { angle: -0.8, width: 0.10, intensity: 0.7,  phase: 1.1  },
+  { angle:  0.9, width: 0.15, intensity: 0.75, phase: 1.5  },
+  { angle: -0.1, width: 0.08, intensity: 0.6,  phase: 2.0  },
+  { angle:  1.3, width: 0.12, intensity: 0.65, phase: 0.5  },
+  { angle: -1.1, width: 0.09, intensity: 0.55, phase: 1.8  },
+]
+
+// particle for the falling figure
+let figureY = -5
+let figureX = CX
+let figureVY = 0.3
+let figurePhase = 0
+
+// figure chars — person falling
+const FIGURE_FRAMES = [
+  ['  o  ', ' /|\\ ', ' / \\ '],  // upright
+  [' \\o/ ', '  |  ', ' / \\ '],  // arms out
+  ['  o  ', ' \\|/ ', '  |  '],  // tucked
+  [' _o_ ', '/   \\', '     '],  // spread
+]
+
+function sampleBeam(x, y, time) {
+  const dx = x - CX
+  const dy = y - CY
+  const dist = Math.sqrt(dx * dx + dy * dy * 2.5)  // elliptical
+
+  if (dist < 0.1) return 1.0
+
+  const angle = Math.atan2(dx, -dy)  // angle from center upward
+
+  let total = 0
+
+  for (const beam of BEAMS) {
+    // animated beam wobble
+    const wobble = Math.sin(time * 0.8 + beam.phase) * 0.05
+    const beamAngle = beam.angle + wobble
+
+    // angular distance from beam center
+    const angleDiff = Math.abs(angle - beamAngle)
+    const wrapped = Math.min(angleDiff, Math.PI * 2 - angleDiff)
+
+    // beam contribution — gaussian falloff by angle
+    const angularFalloff = Math.exp(-wrapped * wrapped / (2 * beam.width * beam.width))
+
+    // distance falloff — rays fade as they extend
+    const distFalloff = Math.exp(-dist * 0.035)
+
+    // flicker
+    const flicker = 0.85 + 0.15 * Math.sin(time * 3.7 + beam.phase * 7.3)
+
+    total += angularFalloff * distFalloff * beam.intensity * flicker
+  }
+
+  // bright core
+  const core = Math.exp(-dist * 0.15) * 1.5
+
+  return Math.min(1.0, total + core)
+}
+
+function intensityToChar(v) {
+  if (v > 0.85) return '█'
+  if (v > 0.70) return '▓'
+  if (v > 0.55) return '▒'
+  if (v > 0.40) return '░'
+  if (v > 0.28) return '⠿'
+  if (v > 0.18) return '⠇'
+  if (v > 0.10) return '⠃'
+  if (v > 0.05) return '⠁'
+  return '⠀'
+}
+
+function intensityToColor(v) {
+  // white core → warm yellow → dim blue-grey → black
+  if (v > 0.8) {
+    const t = (v - 0.8) / 0.2
+    const w = Math.floor(200 + t * 55)
+    return `rgb(${w},${w},${w})`
+  }
+  if (v > 0.4) {
+    const t = (v - 0.4) / 0.4
+    const r = Math.floor(80 + t * 120)
+    const g = Math.floor(60 + t * 100)
+    const b = Math.floor(30 + t * 50)
+    return `rgb(${r},${g},${b})`
+  }
+  if (v > 0.1) {
+    const t = (v - 0.1) / 0.3
+    const c = Math.floor(t * 80)
+    return `rgb(${c},${c},${Math.floor(c * 1.3)})`
+  }
+  return 'rgb(2,2,4)'
+}
+
+let time = 0
+
+mounted.loop(30, (dt) => {
+  time += dt
+
+  // render god rays
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const v = sampleBeam(x, y, time)
+      setCell(grid, x, y, {
+        char: intensityToChar(v),
+        fg: intensityToColor(v),
+      })
+    }
+  }
+
+  // animated figure falling through the light
+  figureY += figureVY * dt * 4
+  figurePhase += dt * 3
+  figureX = CX + Math.sin(figurePhase * 0.3) * 3
+
+  if (figureY > ROWS + 5) {
+    figureY = -5
+    figureX = CX + (Math.random() - 0.5) * 10
+  }
+
+  const frame = FIGURE_FRAMES[Math.floor(figurePhase * 2) % FIGURE_FRAMES.length]
+  const fx = Math.floor(figureX) - 2
+  const fy = Math.floor(figureY)
+
+  // get brightness at figure position to determine color
+  const figBrightness = sampleBeam(figureX, figureY, time)
+  const figColor = figBrightness > 0.5 ? 'rgb(255,255,255)' : 'rgb(180,160,120)'
+
+  for (let row = 0; row < frame.length; row++) {
+    for (let col = 0; col < frame[row].length; col++) {
+      const ch = frame[row][col]
+      if (ch !== ' ') {
+        setCell(grid, fx + col, fy + row, { char: ch, fg: figColor })
+      }
+    }
+  }
+
+  // ground fog at bottom
+  for (let x = 0; x < COLS; x++) {
+    const fogV = sampleBeam(x, ROWS - 1, time) * 0.3
+    if (fogV > 0.02) {
+      setCell(grid, x, ROWS - 1, {
+        char: '░',
+        fg: intensityToColor(fogV * 2)
+      })
+    }
+  }
+
+  mounted.update()
+})
+</script>
+</body>
+</html>

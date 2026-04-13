@@ -67,6 +67,19 @@ mountGrid(grid, element, opts?) → MountedGrid
   .destroy()                    cleanup
 
 createLoop(fps, fn) → LoopHandle
+
+// New Components
+createScrollable(grid, mounted, x, y, w, h, text, style?) → ScrollableHandle
+createTextInput(grid, mounted, x, y, w, opts?) → TextInputHandle
+createKeyNav(mounted, handlers) → KeyNavHandle
+
+// Layers
+createLayer(cols, rows, zIndex) → Layer
+showLayer(layer)
+hideLayer(layer)
+toggleLayer(layer)
+composeLayers(base, ...layers) → Grid
+drawModal(layer, title, content, opts?)
 ```
 
 ### interaction status

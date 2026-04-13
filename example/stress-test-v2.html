@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>dotart-ui — stress test v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #080808; color: #fff; font-family: 'Courier New', monospace; padding: 20px; }
+  h1 { font-size: 10px; letter-spacing: 0.3em; color: #333; margin-bottom: 20px; text-transform: uppercase; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .panel { display: flex; flex-direction: column; gap: 6px; }
+  .label { font-size: 9px; letter-spacing: 0.2em; color: #333; text-transform: uppercase; }
+  .stats { font-size: 9px; color: #333; margin-top: 16px; display: flex; gap: 16px; flex-wrap: wrap; }
+  .stat span { color: #facc15; }
+  #log { font-size: 9px; color: #2a2a2a; margin-top: 10px; height: 48px; overflow-y: auto; }
+  #log div { padding: 1px 0; }
+  .pass { color: #22c55e !important; }
+  .fail { color: #ef4444 !important; }
+  input[type=file] { font-size: 9px; color: #333; margin-top: 4px; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>dotart-ui — stress test v2</h1>
+<div class="grid">
+  <div class="panel"><div class="label">1 — borders badges separators</div><div id="t1"></div></div>
+  <div class="panel"><div class="label">2 — progress sparkline animated</div><div id="t2"></div></div>
+  <div class="panel"><div class="label">3 — textWrapped scrollable pretext</div><div id="t3"></div></div>
+  <div class="panel"><div class="label">4 — fadeText tweenValue scrollRegion</div><div id="t4"></div></div>
+  <div class="panel"><div class="label">5 — hover click leave 24 regions</div><div id="t5"></div></div>
+  <div class="panel"><div class="label">6 — shape-vector image quality</div><div id="t6"></div><input type="file" id="img-input" accept="image/*"></div>
+</div>
+<div class="stats">
+  <div>t1: <span id="s1">-</span></div>
+  <div>t2 fps: <span id="s2">-</span></div>
+  <div>t3 lines: <span id="s3">-</span></div>
+  <div>t4 tween: <span id="s4">-</span></div>
+  <div>t5 hover:<span id="s5h">0</span> click:<span id="s5c">0</span></div>
+  <div>t6: <span id="s6">upload image</span></div>
+</div>
+<div id="log"></div>
+
+<script type="module">
+import {
+  createGrid, setCell, getCell, clearGrid, clearRegion,
+  drawBox, drawText, drawFill, drawImage,
+  drawTextWrapped, drawScrollable, textLineCount,
+  drawProgress, drawSparkline, drawBadge, drawSeparator,
+  tweenValue, fadeText, scrollRegion,
+  centerText, rightAlign,
+  BORDERS, mountGrid,
+} from './ui-bundle.js'
+
+// ── SHAPE VECTOR ALGORITHM ────────────────────────────────────────────────────
+const IC = [
+  [0.30,0.20,0.22],[0.70,0.15,0.22],
+  [0.30,0.50,0.22],[0.70,0.50,0.22],
+  [0.30,0.80,0.22],[0.70,0.85,0.22],
+]
+const EC = [
+  [0.30,-0.15,0.18],[0.70,-0.15,0.18],
+  [-0.15,0.25,0.18],[-0.15,0.75,0.18],
+  [1.15,0.25,0.18],[1.15,0.75,0.18],
+  [0.30,1.15,0.18],[0.70,1.15,0.18],
+  [-0.10,-0.10,0.15],[1.10,1.10,0.15],
+]
+const AE = [[0,1,2,8],[0,1,4,8],[2,3],[4,5],[3,6,7,9],[5,6,7,9]]
+const SC = {}
+
+function buildTable(charset, cw, ch) {
+  const k = charset+':'+cw+'x'+ch
+  if (SC[k]) return SC[k]
+  const s=8,rw=cw*s,rh=ch*s
+  const oc=document.createElement('canvas')
+  oc.width=rw;oc.height=rh
+  const cx=oc.getContext('2d')
+  cx.textBaseline='middle';cx.textAlign='center'
+  cx.font=`${rh*0.85}px monospace`
+  const t=[]
+  for (const c of [...charset]) {
+    cx.clearRect(0,0,rw,rh)
+    cx.fillStyle='#fff'
+    cx.fillText(c,rw/2,rh/2)
+    const {data}=cx.getImageData(0,0,rw,rh)
+    const b=new Float32Array(rw*rh)
+    for (let i=0;i<rw*rh;i++) b[i]=data[i*4+3]/255
+    t.push({c,v:sc(b,rw,rh,IC,4)})
+  }
+  const mx=new Float32Array(6)
+  for (const {v} of t) for (let i=0;i<6;i++) mx[i]=Math.max(mx[i],v[i])
+  for (const s of t) for (let i=0;i<6;i++) if(mx[i]>1e-6) s.v[i]/=mx[i]
+  SC[k]=t; return t
+}
+
+function sc(b,bw,bh,circles,spd) {
+  const v=new Float32Array(6)
+  for (let ci=0;ci<circles.length;ci++) {
+    const [fx,fy,fr]=circles[ci]
+    const cx=fx*bw,cy=fy*bh,r=fr*Math.min(bw,bh)
+    let tot=0,cnt=0
+    for (let i=0;i<spd;i++) for (let j=0;j<spd;j++) {
+      const dx=(i+.5)/spd*2-1,dy=(j+.5)/spd*2-1
+      if(dx*dx+dy*dy>1) continue
+      const px=Math.max(0,Math.min(bw-1,Math.round(cx+dx*r)))
+      const py=Math.max(0,Math.min(bh-1,Math.round(cy+dy*r)))
+      tot+=b[py*bw+px];cnt++
+    }
+    v[ci]=cnt>0?tot/cnt:0
+  }
+  return v
+}
+
+function applyC(internal,external,gc,ec) {
+  const r=Float32Array.from(internal)
+  if(ec>1&&external) {
+    for(let i=0;i<6;i++) {
+      const aff=AE[i];let mx=0
+      for(const idx of aff) mx=Math.max(mx,external[idx])
+      const mv=Math.max(r[i],mx)
+      if(mv>1e-6) r[i]=Math.pow(r[i]/mv,ec)*mv
+    }
+  }
+  if(gc>1) {
+    let mv=0;for(let i=0;i<6;i++) mv=Math.max(mv,r[i])
+    if(mv>1e-6) for(let i=0;i<6;i++) r[i]=Math.pow(r[i]/mv,gc)*mv
+  }
+  return r
+}
+
+function findBest(vec,table) {
+  let bi=0,bd=Infinity
+  for(let i=0;i<table.length;i++) {
+    let d=0;const tv=table[i].v
+    for(let j=0;j<6;j++){const x=vec[j]-tv[j];d+=x*x}
+    if(d<bd){bd=d;bi=i}
+  }
+  return table[bi].c
+}
+
+// auto-detect charset from image histogram
+function autoCharset(data,W,H) {
+  let tot=0;const samples=[]
+  const step=Math.max(1,Math.floor(W*H/300))
+  for(let i=0;i<W*H;i+=step) {
+    const idx=i*4
+    const l=0.2126*data[idx]/255+0.7152*data[idx+1]/255+0.0722*data[idx+2]/255
+    samples.push(l);tot+=l
+  }
+  const mean=tot/samples.length
+  let variance=0
+  for(const l of samples) variance+=(l-mean)**2
+  variance/=samples.length
+  if(variance>0.05) return ' ░▒▓█▀▄▌▐⠀⠁⠂⠄⠈⠐⠠⡀⢀⣀⠃⠆⠇⠸⠼⠿⣿'
+  if(variance>0.02) return ' ░▒▓█▀▄▌▐'
+  return ' ░▒▓█'
+}
+
+// auto-tune contrast from histogram
+function autoContrast(data,W,H) {
+  const hist=new Array(16).fill(0)
+  const step=Math.max(1,Math.floor(W*H/500))
+  for(let i=0;i<W*H;i+=step) {
+    const idx=i*4
+    const l=0.2126*data[idx]/255+0.7152*data[idx+1]/255+0.0722*data[idx+2]/255
+    hist[Math.min(15,Math.floor(l*16))]++
+  }
+  const total=hist.reduce((a,b)=>a+b,0)
+  const filled=hist.filter(v=>v/total>0.02).length
+  return {
+    gc: filled<4?3.5:filled<8?2.5:1.8,
+    ec: filled<4?2.5:filled<8?1.8:1.3
+  }
+}
+
+// ── LOG ───────────────────────────────────────────────────────────────────────
+function log(msg,type='') {
+  const el=document.getElementById('log')
+  const d=document.createElement('div')
+  d.textContent=`[${new Date().toLocaleTimeString()}] ${msg}`
+  if(type) d.className=type
+  el.appendChild(d)
+  el.scrollTop=el.scrollHeight
+}
+
+// ── TEST 1 — drawBox all borders + drawBadge + drawSeparator + centerText + rightAlign
+;(()=>{
+  const grid=createGrid(36,22)
+
+  drawBox(grid,0,0,18,5,{border:'single',fg:'#444'})
+  drawText(grid,2,0,' single ',{fg:'#555'})
+  drawBox(grid,18,0,18,5,{border:'double',fg:'#555'})
+  drawText(grid,20,0,' double ',{fg:'#555'})
+  drawBox(grid,0,5,18,5,{border:'heavy',fg:'#facc15'})
+  drawText(grid,2,5,' heavy ',{fg:'#facc15'})
+  drawBox(grid,18,5,18,5,{border:'dashed',fg:'#444'})
+  drawText(grid,20,5,' dashed ',{fg:'#444'})
+
+  drawBox(grid,0,10,12,4,{border:'single',fg:'#222',fill:'░'})
+  drawBox(grid,12,10,12,4,{border:'single',fg:'#222',fill:'▒'})
+  drawBox(grid,24,10,12,4,{border:'single',fg:'#222',fill:'▓'})
+
+  drawText(grid,1,15,'badges:',{fg:'#333'})
+  drawBadge(grid,9,15,'new',{fg:'#4ade80'})
+  drawBadge(grid,15,15,'bug',{fg:'#f87171'})
+  drawBadge(grid,21,15,'v0.1',{fg:'#60a5fa'})
+
+  drawSeparator(grid,0,17,36,undefined,{fg:'#1a1a1a'})
+  drawSeparator(grid,0,19,36,'section',{fg:'#2a2a2a'})
+  centerText(grid,14,'· centered ·',{fg:'#444'})
+  rightAlign(grid,16,'right →',{fg:'#333'})
+
+  const m=mountGrid(grid,document.getElementById('t1'),{fontSize:13})
+  m.update()
+  document.getElementById('s1').textContent='4 borders ✓ badges ✓ separators ✓'
+  log('t1: borders badges separators centerText rightAlign','pass')
+})()
+
+// ── TEST 2 — drawProgress + drawSparkline animated at 60fps
+;(()=>{
+  const grid=createGrid(36,22)
+  drawBox(grid,0,0,36,22,{border:'single',fg:'#1a1a1a'})
+  drawText(grid,2,0,' data display ',{fg:'#333'})
+
+  const sine=Array.from({length:32},(_,i)=>Math.sin(i/32*Math.PI*4)*0.5+0.5)
+  const ramp=Array.from({length:32},(_,i)=>i/32)
+  const noise=Array.from({length:32},()=>Math.random())
+  const spike=Array.from({length:32},(_,i)=>i===16?1:0.05)
+
+  drawText(grid,2,2,'sine',{fg:'#333'})
+  drawSparkline(grid,7,2,27,sine,{fg:'#facc15'})
+  drawText(grid,2,3,'ramp',{fg:'#333'})
+  drawSparkline(grid,7,3,27,ramp,{fg:'#4ade80'})
+  drawText(grid,2,4,'noise',{fg:'#333'})
+  drawSparkline(grid,7,4,27,noise,{fg:'#60a5fa'})
+  drawText(grid,2,5,'spike',{fg:'#333'})
+  drawSparkline(grid,7,5,27,spike,{fg:'#f87171'})
+
+  drawSeparator(grid,1,7,34,'progress',{fg:'#1a1a1a'})
+
+  const m=mountGrid(grid,document.getElementById('t2'),{fontSize:13})
+  m.update()
+
+  let phase=0,frames=0,lastFps=performance.now()
+
+  m.loop(60,(dt)=>{
+    phase+=dt
+    frames++
+    if(performance.now()-lastFps>500){
+      document.getElementById('s2').textContent=Math.round(frames*1000/(performance.now()-lastFps))
+      frames=0;lastFps=performance.now()
+    }
+
+    drawProgress(grid,5,9,29,(Math.sin(phase)*0.5+0.5),1,{fg:'#facc15',showDot:true})
+    drawProgress(grid,5,11,29,(Math.sin(phase*0.7+1)*0.5+0.5),1,{fg:'#60a5fa',showDot:true})
+    drawProgress(grid,5,13,29,(Math.sin(phase*1.3+2)*0.5+0.5),1,{fg:'#4ade80',filledChar:'▰',emptyChar:'▱',showDot:false})
+    drawProgress(grid,5,15,29,(phase%3)/3,1,{fg:'#a78bfa',showDot:true})
+
+    const live=Array.from({length:32},(_,i)=>Math.sin(i/32*Math.PI*6+phase)*0.5+0.5)
+    drawSparkline(grid,2,17,32,live,{fg:'#222'})
+
+    const live2=Array.from({length:32},(_,i)=>Math.cos(i/32*Math.PI*8+phase)*0.5+0.5)
+    drawSparkline(grid,2,18,32,live2,{fg:'#1a1a1a'})
+
+    m.update()
+  })
+})()
+
+// ── TEST 3 — drawTextWrapped + drawScrollable + textLineCount (pretext)
+;(()=>{
+  const grid=createGrid(36,22)
+  drawBox(grid,0,0,36,22,{border:'single',fg:'#1a1a1a'})
+  drawText(grid,2,0,' pretext layout ',{fg:'#333'})
+
+  const text=`pretext (github.com/chenglou/pretext) measures text using canvas.measureText — same font engine as the browser. dotart uses it for accurate line wrapping without DOM reflow. supports unicode emoji 🚀 and box-drawing chars ╭╮╰╯.`
+
+  const rows=drawTextWrapped(grid,2,2,32,7,text,{fg:'#555'})
+  const count=textLineCount(text,32)
+  document.getElementById('s3').textContent=`${rows} rows drawn ${count} total lines`
+  log(`t3: drawTextWrapped used ${rows} rows textLineCount=${count}`,rows>0?'pass':'fail')
+
+  drawSeparator(grid,1,10,34,'scrollable',{fg:'#1a1a1a'})
+
+  const content=[
+    'createGrid setCell getCell',
+    'clearGrid clearRegion',
+    'drawBox drawText drawFill',
+    'drawImage drawTextWrapped',
+    'drawScrollable textLineCount',
+    'drawProgress drawSparkline',
+    'drawBadge drawSeparator',
+    'centerText rightAlign',
+    'tweenValue fadeText',
+    'scrollRegion mountGrid',
+    'on off loop destroy',
+    'hover click leave touch',
+    'resize reflow pretext',
+    'canvas measureText font',
+  ].join('\n')
+
+  let offset=0
+  const m=mountGrid(grid,document.getElementById('t3'),{fontSize:13})
+
+  function render(){
+    const {totalLines}=drawScrollable(grid,2,12,32,9,content,offset,{fg:'#444'})
+    drawText(grid,2,11,`offset ${offset}/${Math.max(0,totalLines-9)}`,{fg:'#222'})
+    m.update()
+  }
+  render()
+
+  m.loop(1.5,()=>{
+    const {totalLines}=drawScrollable(grid,2,12,32,9,content,offset,{fg:'#444'})
+    offset=(offset+1)%Math.max(1,totalLines-8)
+    render()
+  })
+})()
+
+// ── TEST 4 — fadeText + tweenValue + scrollRegion
+;(()=>{
+  const grid=createGrid(36,22)
+  drawBox(grid,0,0,36,22,{border:'single',fg:'#1a1a1a'})
+  drawText(grid,2,0,' animation helpers ',{fg:'#333'})
+
+  const m=mountGrid(grid,document.getElementById('t4'),{fontSize:13})
+  m.update()
+
+  // fadeText typewriter — restarts after done
+  drawText(grid,2,2,'typewriter:',{fg:'#222'})
+  function startType(){
+    clearRegion(grid,2,3,32,1)
+    fadeText(grid,2,3,'dotart-ui — ASCII UI engine for the web',{fg:'#facc15'},()=>{
+      setTimeout(startType,1200)
+      m.update()
+    })
+  }
+  startType()
+
+  // tweenValue — bouncing bar
+  drawText(grid,2,6,'tween:',{fg:'#222'})
+  let te=0,td=1
+
+  // scrollRegion — content conveyor
+  drawSeparator(grid,1,9,34,'scrollRegion',{fg:'#1a1a1a'})
+  const colors=['#facc15','#4ade80','#60a5fa','#a78bfa','#f87171','#fb923c','#f472b6','#34d399']
+  const words=['dotart','ascii','grid','hover','click','loop','tween','fade','scroll','pretext','canvas','font']
+  for(let i=0;i<8;i++){
+    drawText(grid,2,11+i,`${words[i%words.length].padEnd(10)} `,{fg:colors[i%colors.length]})
+  }
+
+  m.loop(60,(dt)=>{
+    te+=dt*td
+    if(te>=1){te=1;td=-1}
+    if(te<=0){te=0;td=1}
+    const v=tweenValue(0,32,te)
+    document.getElementById('s4').textContent=v.toFixed(1)
+    clearRegion(grid,2,7,32,1)
+    drawProgress(grid,2,7,32,te,1,{fg:'#a78bfa',showDot:true})
+    m.update()
+  })
+
+  m.loop(3,()=>{
+    scrollRegion(grid,2,11,32,8,1)
+    const idx=Math.floor(performance.now()/333)%words.length
+    drawText(grid,2,18,`${words[idx].padEnd(10)} `,{fg:colors[idx%colors.length]})
+    m.update()
+  })
+})()
+
+// ── TEST 5 — 24 hover+click regions (6×4 grid)
+;(()=>{
+  const grid=createGrid(36,22)
+  drawBox(grid,0,0,36,22,{border:'single',fg:'#1a1a1a'})
+  drawText(grid,2,0,' interactions ',{fg:'#333'})
+
+  const m=mountGrid(grid,document.getElementById('t5'),{fontSize:13})
+  let hovers=0,clicks=0
+
+  const BW=5,BH=3,BCOLS=6,BROWS=4,SX=1,SY=2
+
+  for(let row=0;row<BROWS;row++){
+    for(let col=0;col<BCOLS;col++){
+      const x=SX+col*(BW+1),y=SY+row*BH
+      const label=`${(row*BCOLS+col+1).toString().padStart(2,'0')}`
+      const hue=(row*BCOLS+col)*15
+
+      drawFill(grid,x,y,BW,BH,'░',`hsl(${hue},25%,12%)`)
+      drawText(grid,x+1,y+1,label,{fg:`hsl(${hue},35%,25%)`})
+
+      m.on('hover',x,y,BW,BH,()=>{
+        hovers++
+        clearRegion(grid,x,y,BW,BH)
+        drawFill(grid,x,y,BW,BH,'▓',`hsl(${hue},60%,40%)`)
+        drawText(grid,x+1,y+1,label,{fg:`hsl(${hue},90%,70%)`})
+        document.getElementById('s5h').textContent=hovers
+        m.update()
+      })
+
+      m.on('leave',x,y,BW,BH,()=>{
+        clearRegion(grid,x,y,BW,BH)
+        drawFill(grid,x,y,BW,BH,'░',`hsl(${hue},25%,12%)`)
+        drawText(grid,x+1,y+1,label,{fg:`hsl(${hue},35%,25%)`})
+        m.update()
+      })
+
+      m.on('click',x,y,BW,BH,()=>{
+        clicks++
+        clearRegion(grid,x,y,BW,BH)
+        drawFill(grid,x,y,BW,BH,'█',`hsl(${hue},80%,55%)`)
+        drawText(grid,x+1,y+1,label,{fg:'#000'})
+        document.getElementById('s5c').textContent=clicks
+        m.update()
+        setTimeout(()=>{
+          clearRegion(grid,x,y,BW,BH)
+          drawFill(grid,x,y,BW,BH,'░',`hsl(${hue},25%,12%)`)
+          drawText(grid,x+1,y+1,label,{fg:`hsl(${hue},35%,25%)`})
+          m.update()
+        },300)
+      })
+    }
+  }
+
+  drawSeparator(grid,1,14,34,'status',{fg:'#1a1a1a'})
+  drawText(grid,2,16,'hover and click the buttons above',{fg:'#222'})
+
+  const frames=['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
+  let f=0
+  m.loop(12,()=>{
+    f=(f+1)%frames.length
+    setCell(grid,34,20,{char:frames[f],fg:'#1a1a1a'})
+    m.update()
+  })
+
+  m.update()
+  log(`t5: ${BCOLS*BROWS*3} event handlers registered`)
+})()
+
+// ── TEST 6 — shape-vector image (auto charset + auto contrast)
+;(()=>{
+  const grid=createGrid(36,22)
+  drawBox(grid,0,0,36,22,{border:'single',fg:'#1a1a1a'})
+  centerText(grid,10,'upload an image',{fg:'#222'})
+  centerText(grid,11,'algorithm auto-detects charset + contrast',{fg:'#1a1a1a'})
+
+  const m=mountGrid(grid,document.getElementById('t6'),{fontSize:13})
+  m.update()
+
+  document.getElementById('img-input').addEventListener('change',async(e)=>{
+    const file=e.target.files[0]
+    if(!file) return
+
+    const img=new Image()
+    img.src=URL.createObjectURL(file)
+    await img.decode()
+
+    const innerCols=34,innerRows=20
+    const cellW=Math.max(4,Math.floor(img.width/innerCols))
+    const cellH=Math.max(8,Math.floor(cellW*2))
+
+    const cv=document.createElement('canvas')
+    cv.width=innerCols*cellW
+    cv.height=innerRows*cellH
+    const cx=cv.getContext('2d')
+    cx.drawImage(img,0,0,cv.width,cv.height)
+    const {data}=cx.getImageData(0,0,cv.width,cv.height)
+    const W=cv.width
+
+    // auto-detect — no hardcoded values
+    const charset=autoCharset(data,W,cv.height)
+    const {gc,ec}=autoContrast(data,W,cv.height)
+    const table=buildTable(charset,cellW,cellH)
+
+    log(`t6: charset=${charset.length}chars gc=${gc.toFixed(1)} ec=${ec.toFixed(1)}`)
+
+    const t0=performance.now()
+
+    for(let row=0;row<innerRows;row++){
+      for(let col=0;col<innerCols;col++){
+        const luma=new Float32Array(cellW*cellH)
+        let sr=0,sg=0,sb=0,cnt=0
+
+        for(let cy=0;cy<cellH;cy++){
+          for(let cx2=0;cx2<cellW;cx2++){
+            const px=col*cellW+cx2,py=row*cellH+cy
+            if(px>=W) continue
+            const idx=(py*W+px)*4
+            const r=data[idx],g=data[idx+1],b=data[idx+2]
+            luma[cy*cellW+cx2]=0.2126*r/255+0.7152*g/255+0.0722*b/255
+            sr+=r;sg+=g;sb+=b;cnt++
+          }
+        }
+
+        const inv=luma.map(v=>1-v)
+        const internal=sc(inv,cellW,cellH,IC,4)
+        const external=sc(inv,cellW,cellH,EC,4)
+        const enhanced=applyC(internal,external,gc,ec)
+        const ch=findBest(enhanced,table)
+
+        const r=cnt?Math.round(sr/cnt):128
+        const g=cnt?Math.round(sg/cnt):128
+        const b=cnt?Math.round(sb/cnt):128
+
+        setCell(grid,col+1,row+1,{
+          char:ch,
+          fg:`#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`
+        })
+      }
+    }
+
+    const ms=Math.round(performance.now()-t0)
+    document.getElementById('s6').textContent=`${ms}ms`
+    log(`t6: ${innerCols}×${innerRows} rendered in ${ms}ms`,ms<5000?'pass':'fail')
+    m.update()
+  })
+})()
+
+log('all 6 tests ready')
+</script>
+</body>
+</html>

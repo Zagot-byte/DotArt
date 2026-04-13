@@ -164,6 +164,41 @@ centerText(grid, y, text, style?)
 rightAlign(grid, y, text, style?)
 ```
 
+### advanced components & layers
+
+```ts
+// scroll
+createScrollable(grid, mounted, x, y, w, h, text, style?) → ScrollableHandle
+  .scrollUp()
+  .scrollDown()
+  .scrollTo(offset)
+  .getOffset()
+  .getTotalLines()
+  .destroy()
+
+// text input
+createTextInput(grid, mounted, x, y, w, opts?) → TextInputHandle
+  opts: { fg?, bg?, cursorChar?, placeholder?, onChange?, onSubmit? }
+  .focus()
+  .blur()
+  .getValue()
+  .setValue(v)
+  .destroy()
+
+// layers
+createLayer(cols, rows, zIndex?) → Layer
+composeLayers(base, ...layers) → Grid
+showLayer(layer)
+hideLayer(layer)
+toggleLayer(layer)
+drawModal(layer, title, content, opts?) → void
+
+// keyboard navigation
+createKeyNav(mounted, handlers) → KeyNavHandle
+  handlers: { up?, down?, left?, right?, enter?, escape?, tab?, char? }
+  .destroy()
+```
+
 ### animation
 
 ```ts
@@ -274,6 +309,49 @@ function render() {
 mounted.on('click', 2, 2, 40, 20, () => { offset = Math.min(offset+1, totalLines-20); render() })
 ```
 
+**scrollable region with wheel support:**
+```ts
+const scroller = createScrollable(grid, mounted, 2, 5, 40, 15, longText, { fg: '#888' })
+// mouse wheel auto-handled
+// manual scroll:
+scroller.scrollDown()
+scroller.scrollUp()
+```
+
+**text input with cursor:**
+```ts
+const input = createTextInput(grid, mounted, 2, 10, 30, {
+  placeholder: 'search...',
+  fg: '#fff',
+  onChange: (v) => { /* live update */ },
+  onSubmit: (v) => { /* enter pressed */ }
+})
+input.focus()  // call to activate
+```
+
+**modal on layer above base grid:**
+```ts
+const modal = createLayer(grid.cols, grid.rows, 10)
+drawModal(modal, 'Confirm', 'Are you sure?', { borderFg: '#facc15' })
+showLayer(modal)
+// to render: composeLayers(grid, modal) → pass to mounted
+mounted.on('click', confirmX, confirmY, 10, 3, () => {
+  hideLayer(modal)
+  mounted.update()
+})
+```
+
+**keyboard navigation:**
+```ts
+const nav = createKeyNav(mounted, {
+  up:     () => { selected--; render() },
+  down:   () => { selected++; render() },
+  enter:  () => { openSelected(); render() },
+  escape: () => { closeModal(); render() },
+})
+// always call nav.destroy() on cleanup
+```
+
 ## @dotart/renderer — API
 
 ```ts
@@ -316,6 +394,12 @@ CHARSETS.mixed   // braille + block
 8. `drawText` clips at grid edge — no wrapping. use `drawTextWrapped` for wrapping
 9. `drawImage` clips silently — safe to call even if cells extend beyond grid
 10. never manipulate `grid.cells` directly — always use setCell/clearRegion
+11. createTextInput needs a hidden <input> in document.body — always call .destroy() on cleanup
+12. composeLayers returns a NEW grid — pass it to a separate mountGrid or render manually
+13. createKeyNav attaches to window — always call .destroy() to avoid memory leaks
+14. createScrollable attaches wheel listener — always call .destroy() on cleanup
+15. layers are composited top-to-bottom by zIndex — higher zIndex = on top
+16. transparent cells in layers (char=' ' fg='#ffffff' bg='') = passthrough, don't overwrite base
 
 ## repo structure
 

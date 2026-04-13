@@ -1,294 +1,410 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<title>dotart-ui stress test</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #080808; color: #fff; font-family: 'Courier New', monospace; padding: 20px; }
-  h1 { font-size: 11px; letter-spacing: 0.3em; color: #333; margin-bottom: 20px; text-transform: uppercase; }
-  .layout { display: flex; gap: 40px; flex-wrap: wrap; }
-  .panel { display: flex; flex-direction: column; gap: 8px; }
-  .label { font-size: 9px; letter-spacing: 0.2em; color: #333; text-transform: uppercase; }
-  .stats { font-size: 10px; color: #333; margin-top: 20px; display: flex; gap: 20px; flex-wrap: wrap; }
-  .stat span { color: #facc15; }
-  #log { font-size: 10px; color: #444; margin-top: 12px; height: 60px; overflow-y: auto; }
-  #log div { padding: 1px 0; }
-  .pass { color: #22c55e !important; }
-  .fail { color: #ef4444 !important; }
-</style>
+  <meta charset="UTF-8">
+  <title>dotart-ui stress test</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #080808;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 11px;
+      letter-spacing: 0.3em;
+      color: #333;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+    }
+
+    .layout {
+      display: flex;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .label {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      color: #333;
+      text-transform: uppercase;
+    }
+
+    .stats {
+      font-size: 10px;
+      color: #333;
+      margin-top: 20px;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .stat span {
+      color: #facc15;
+    }
+
+    #log {
+      font-size: 10px;
+      color: #444;
+      margin-top: 12px;
+      height: 60px;
+      overflow-y: auto;
+    }
+
+    #log div {
+      padding: 1px 0;
+    }
+
+    .pass {
+      color: #22c55e !important;
+    }
+
+    .fail {
+      color: #ef4444 !important;
+    }
+  </style>
 </head>
+
 <body>
-<h1>dotart-ui — stress test</h1>
+  <h1>dotart-ui — stress test</h1>
 
-<div class="layout">
-  <div class="panel">
-    <div class="label">test 1 — rapid rerender (60fps)</div>
-    <div id="test1"></div>
+  <div class="layout">
+    <div class="panel">
+      <div class="label">test 1 — rapid rerender (60fps)</div>
+      <div id="test1"></div>
+    </div>
+    <div class="panel">
+      <div class="label">test 2 — many hover regions</div>
+      <div id="test2"></div>
+    </div>
+    <div class="panel">
+      <div class="label">test 3 — large grid</div>
+      <div id="test3"></div>
+    </div>
+    <div class="panel">
+      <div class="label">test 4 — nested animations</div>
+      <div id="test4"></div>
+    </div>
   </div>
-  <div class="panel">
-    <div class="label">test 2 — many hover regions</div>
-    <div id="test2"></div>
+
+  <div class="stats">
+    <div>t1 fps: <span id="s1-fps">-</span></div>
+    <div>t1 renders: <span id="s1-renders">0</span></div>
+    <div>t2 hovers: <span id="s2-hovers">0</span></div>
+    <div>t2 clicks: <span id="s2-clicks">0</span></div>
+    <div>t3 cells: <span id="s3-cells">0</span></div>
+    <div>t3 ms: <span id="s3-ms">-</span></div>
+    <div>t4 loops: <span id="s4-loops">0</span></div>
   </div>
+
+  <div id="log"></div>
   <div class="panel">
-    <div class="label">test 3 — large grid</div>
-    <div id="test3"></div>
+    <div class="label">test 5 — image quality</div>
+    <div id="test5"></div>
+    <input type="file" id="img-upload" accept="image/*" style="font-size:10px;color:#444;margin-top:4px">
   </div>
-  <div class="panel">
-    <div class="label">test 4 — nested animations</div>
-    <div id="test4"></div>
-  </div>
-</div>
+  <script type="module">
+    import {
+      createGrid, setCell, clearRegion,
+      drawBox, drawText, drawFill,
+      mountGrid, BORDERS
+    } from './ui-bundle.js'
 
-<div class="stats">
-  <div>t1 fps: <span id="s1-fps">-</span></div>
-  <div>t1 renders: <span id="s1-renders">0</span></div>
-  <div>t2 hovers: <span id="s2-hovers">0</span></div>
-  <div>t2 clicks: <span id="s2-clicks">0</span></div>
-  <div>t3 cells: <span id="s3-cells">0</span></div>
-  <div>t3 ms: <span id="s3-ms">-</span></div>
-  <div>t4 loops: <span id="s4-loops">0</span></div>
-</div>
-
-<div id="log"></div>
-
-<script type="module">
-import {
-  createGrid, setCell, clearRegion,
-  drawBox, drawText, drawFill,
-  mountGrid, BORDERS
-} from './ui-bundle.js'
-
-const log = (msg, type = '') => {
-  const el = document.getElementById('log')
-  const d = document.createElement('div')
-  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`
-  if (type) d.className = type
-  el.appendChild(d)
-  el.scrollTop = el.scrollHeight
-}
-
-// ── TEST 1 — rapid rerender at 60fps ─────────────────────────────────────────
-;(() => {
-  const COLS = 30, ROWS = 8
-  const grid = createGrid(COLS, ROWS)
-  drawBox(grid, 0, 0, COLS, ROWS, { border: 'single', fg: '#222' })
-  drawText(grid, 2, 1, 'rapid rerender test', { fg: '#333' })
-
-  const mounted = mountGrid(grid, document.getElementById('test1'), { fontSize: 12 })
-  mounted.update()
-
-  let renders = 0
-  let lastFpsTime = performance.now()
-  let fpsCount = 0
-
-  const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
-  let f = 0
-  let phase = 0
-
-  mounted.loop(60, (dt) => {
-    phase += dt
-    f = (f + 1) % frames.length
-
-    // update multiple cells per frame
-    setCell(grid, 2, 3, { char: frames[f], fg: '#facc15' })
-
-    // animated number
-    const n = Math.floor(phase * 100) % 10000
-    clearRegion(grid, 2, 4, 20, 1)
-    drawText(grid, 2, 4, `frame: ${n.toString().padStart(5,'0')}`, { fg: '#444' })
-
-    // bar animation
-    const barW = COLS - 4
-    const pos = Math.floor((Math.sin(phase * 2) * 0.5 + 0.5) * barW)
-    clearRegion(grid, 2, 6, barW, 1)
-    for (let i = 0; i < barW; i++) {
-      setCell(grid, 2 + i, 6, {
-        char: i === pos ? '●' : i < pos ? '━' : '─',
-        fg: i === pos ? '#facc15' : i < pos ? '#333' : '#1a1a1a'
-      })
+    const log = (msg, type = '') => {
+      const el = document.getElementById('log')
+      const d = document.createElement('div')
+      d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`
+      if (type) d.className = type
+      el.appendChild(d)
+      el.scrollTop = el.scrollHeight
     }
 
-    mounted.update()
-    renders++
-    fpsCount++
+      // ── TEST 1 — rapid rerender at 60fps ─────────────────────────────────────────
+      ; (() => {
+        const COLS = 30, ROWS = 8
+        const grid = createGrid(COLS, ROWS)
+        drawBox(grid, 0, 0, COLS, ROWS, { border: 'single', fg: '#222' })
+        drawText(grid, 2, 1, 'rapid rerender test', { fg: '#333' })
 
-    const now = performance.now()
-    if (now - lastFpsTime > 500) {
-      const fps = Math.round(fpsCount * 1000 / (now - lastFpsTime))
-      document.getElementById('s1-fps').textContent = fps
-      document.getElementById('s1-renders').textContent = renders
-      fpsCount = 0
-      lastFpsTime = now
-    }
-  })
-
-  log('test1: 60fps loop started')
-})()
-
-// ── TEST 2 — many hover regions ───────────────────────────────────────────────
-;(() => {
-  const COLS = 32, ROWS = 12
-  const grid = createGrid(COLS, ROWS)
-  drawBox(grid, 0, 0, COLS, ROWS, { border: 'single', fg: '#222' })
-  drawText(grid, 2, 1, 'hover grid — all cells active', { fg: '#333' })
-
-  const mounted = mountGrid(grid, document.getElementById('test2'), { fontSize: 12 })
-
-  let hovers = 0
-  let clicks = 0
-
-  // create a 6x4 grid of hoverable buttons
-  const btnW = 4, btnH = 2
-  const startX = 2, startY = 3
-  const cols = 6, rows = 4
-
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const x = startX + col * (btnW + 1)
-      const y = startY + row * (btnH)
-      const label = `${row * cols + col + 1}`.padStart(2, '0')
-
-      drawBox(grid, x, y, btnW, btnH, { border: 'none', fill: '░', fg: '#1a1a1a' })
-      drawText(grid, x + 1, y, label, { fg: '#2a2a2a' })
-
-      mounted.on('hover', x, y, btnW, btnH, () => {
-        hovers++
-        clearRegion(grid, x, y, btnW, btnH)
-        drawBox(grid, x, y, btnW, btnH, { border: 'none', fill: '▓', fg: '#facc15' })
-        drawText(grid, x + 1, y, label, { fg: '#facc15' })
-        document.getElementById('s2-hovers').textContent = hovers
+        const mounted = mountGrid(grid, document.getElementById('test1'), { fontSize: 12 })
         mounted.update()
-      })
 
-      mounted.on('leave', x, y, btnW, btnH, () => {
-        clearRegion(grid, x, y, btnW, btnH)
-        drawBox(grid, x, y, btnW, btnH, { border: 'none', fill: '░', fg: '#1a1a1a' })
-        drawText(grid, x + 1, y, label, { fg: '#2a2a2a' })
-        mounted.update()
-      })
+        let renders = 0
+        let lastFpsTime = performance.now()
+        let fpsCount = 0
 
-      mounted.on('click', x, y, btnW, btnH, () => {
-        clicks++
-        clearRegion(grid, x, y, btnW, btnH)
-        drawBox(grid, x, y, btnW, btnH, { border: 'none', fill: '█', fg: '#fff' })
-        drawText(grid, x + 1, y, label, { fg: '#000' })
-        document.getElementById('s2-clicks').textContent = clicks
-        mounted.update()
-        setTimeout(() => {
-          clearRegion(grid, x, y, btnW, btnH)
-          drawBox(grid, x, y, btnW, btnH, { border: 'none', fill: '░', fg: '#1a1a1a' })
-          drawText(grid, x + 1, y, label, { fg: '#2a2a2a' })
+        const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+        let f = 0
+        let phase = 0
+
+        mounted.loop(60, (dt) => {
+          phase += dt
+          f = (f + 1) % frames.length
+
+          // update multiple cells per frame
+          setCell(grid, 2, 3, { char: frames[f], fg: '#facc15' })
+
+          // animated number
+          const n = Math.floor(phase * 100) % 10000
+          clearRegion(grid, 2, 4, 20, 1)
+          drawText(grid, 2, 4, `frame: ${n.toString().padStart(5, '0')}`, { fg: '#444' })
+
+          // bar animation
+          const barW = COLS - 4
+          const pos = Math.floor((Math.sin(phase * 2) * 0.5 + 0.5) * barW)
+          clearRegion(grid, 2, 6, barW, 1)
+          for (let i = 0; i < barW; i++) {
+            setCell(grid, 2 + i, 6, {
+              char: i === pos ? '●' : i < pos ? '━' : '─',
+              fg: i === pos ? '#facc15' : i < pos ? '#333' : '#1a1a1a'
+            })
+          }
+
           mounted.update()
-        }, 200)
-      })
-    }
-  }
+          renders++
+          fpsCount++
 
-  mounted.update()
-  log(`test2: ${cols * rows * 3} event handlers registered`)
-})()
-
-// ── TEST 3 — large grid render time ──────────────────────────────────────────
-;(() => {
-  const COLS = 80, ROWS = 20
-  const grid = createGrid(COLS, ROWS)
-
-  const t0 = performance.now()
-
-  // fill with pattern
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      const chars = '⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛'
-      const ci = (x * 7 + y * 13) % chars.length
-      const hue = (x * 4 + y * 8) % 360
-      setCell(grid, x, y, {
-        char: chars[ci],
-        fg: `hsl(${hue}, 40%, 25%)`
-      })
-    }
-  }
-
-  drawBox(grid, 0, 0, COLS, ROWS, { border: 'double', fg: '#333' })
-  drawText(grid, 2, 1, `${COLS}×${ROWS} = ${COLS*ROWS} cells`, { fg: '#555' })
-
-  const mounted = mountGrid(grid, document.getElementById('test3'), { fontSize: 10 })
-  mounted.update()
-
-  const ms = Math.round(performance.now() - t0)
-  document.getElementById('s3-cells').textContent = COLS * ROWS
-  document.getElementById('s3-ms').textContent = ms
-
-  // stress: redraw every 2s
-  let redraws = 0
-  mounted.loop(0.5, () => {
-    redraws++
-    for (let y = 1; y < ROWS - 1; y++) {
-      for (let x = 1; x < COLS - 1; x++) {
-        const chars = '⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏'
-        const ci = (x * 7 + y * 13 + redraws * 3) % chars.length
-        const hue = (x * 4 + y * 8 + redraws * 10) % 360
-        setCell(grid, x, y, {
-          char: chars[ci],
-          fg: `hsl(${hue}, 40%, 25%)`
+          const now = performance.now()
+          if (now - lastFpsTime > 500) {
+            const fps = Math.round(fpsCount * 1000 / (now - lastFpsTime))
+            document.getElementById('s1-fps').textContent = fps
+            document.getElementById('s1-renders').textContent = renders
+            fpsCount = 0
+            lastFpsTime = now
+          }
         })
-      }
-    }
-    drawText(grid, 2, 1, `redraw #${redraws} — ${COLS}×${ROWS}`, { fg: '#555' })
-    const t = performance.now()
-    mounted.update()
-    const renderMs = Math.round(performance.now() - t)
-    document.getElementById('s3-ms').textContent = renderMs
-  })
 
-  log(`test3: ${COLS*ROWS} cells initial render in ${ms}ms`)
-  if (ms < 50) log('test3: render time OK', 'pass')
-  else log(`test3: render time slow (${ms}ms)`, 'fail')
-})()
+        log('test1: 60fps loop started')
+      })()
 
-// ── TEST 4 — multiple concurrent loops ────────────────────────────────────────
-;(() => {
-  const COLS = 30, ROWS = 10
-  const grid = createGrid(COLS, ROWS)
-  drawBox(grid, 0, 0, COLS, ROWS, { border: 'single', fg: '#222' })
+      // ── TEST 2 — many hover regions ───────────────────────────────────────────────
+      ; (() => {
+        const COLS = 32, ROWS = 12
+        const grid = createGrid(COLS, ROWS)
+        drawBox(grid, 0, 0, COLS, ROWS, { border: 'single', fg: '#222' })
+        drawText(grid, 2, 1, 'hover grid — all cells active', { fg: '#333' })
 
-  const mounted = mountGrid(grid, document.getElementById('test4'), { fontSize: 12 })
-  mounted.update()
+        const mounted = mountGrid(grid, document.getElementById('test2'), { fontSize: 12 })
 
-  let totalLoops = 0
-  const spinners = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
+        let hovers = 0
+        let clicks = 0
 
-  // 4 independent loops at different fps
-  const configs = [
-    { fps: 60, row: 2, col: 2,  label: '60fps', color: '#facc15' },
-    { fps: 30, row: 4, col: 2,  label: '30fps', color: '#22c55e' },
-    { fps: 12, row: 6, col: 2,  label: '12fps', color: '#3b82f6' },
-    { fps: 4,  row: 8, col: 2,  label: ' 4fps', color: '#ef4444' },
-  ]
+        // create a 6x4 grid of hoverable buttons
+        const btnW = 4, btnH = 2
+        const startX = 2, startY = 3
+        const cols = 6, rows = 4
 
-  for (const c of configs) {
-    let f = 0
-    let ticks = 0
-    drawText(grid, c.col, c.row, `${c.label} ⠋ ticks:00000`, { fg: c.color })
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const x = startX + col * (btnW + 1)
+            const y = startY + row * (btnH)
+            const label = `${row * cols + col + 1}`.padStart(2, '0')
 
-    mounted.loop(c.fps, () => {
-      f = (f + 1) % spinners.length
-      ticks++
-      totalLoops++
-      clearRegion(grid, c.col, c.row, 26, 1)
-      drawText(grid, c.col, c.row,
-        `${c.label} ${spinners[f]} ticks:${ticks.toString().padStart(5,'0')}`,
-        { fg: c.color }
-      )
-      document.getElementById('s4-loops').textContent = totalLoops
-      mounted.update()
-    })
-  }
+            drawBox(grid, x, y, btnW, btnH, { border: 'none', fill: '░', fg: '#1a1a1a' })
+            drawText(grid, x + 1, y, label, { fg: '#2a2a2a' })
 
-  log(`test4: 4 concurrent loops (60+30+12+4 fps)`)
-})()
+            mounted.on('hover', x, y, btnW, btnH, () => {
+              hovers++
+              clearRegion(grid, x, y, btnW, btnH)
+              drawBox(grid, x, y, btnW, btnH, { border: 'none', fill: '▓', fg: '#facc15' })
+              drawText(grid, x + 1, y, label, { fg: '#facc15' })
+              document.getElementById('s2-hovers').textContent = hovers
+              mounted.update()
+            })
 
-log('all tests initialized — interact with test2 grid')
-</script>
+            mounted.on('leave', x, y, btnW, btnH, () => {
+              clearRegion(grid, x, y, btnW, btnH)
+              drawBox(grid, x, y, btnW, btnH, { border: 'none', fill: '░', fg: '#1a1a1a' })
+              drawText(grid, x + 1, y, label, { fg: '#2a2a2a' })
+              mounted.update()
+            })
+
+            mounted.on('click', x, y, btnW, btnH, () => {
+              clicks++
+              clearRegion(grid, x, y, btnW, btnH)
+              drawBox(grid, x, y, btnW, btnH, { border: 'none', fill: '█', fg: '#fff' })
+              drawText(grid, x + 1, y, label, { fg: '#000' })
+              document.getElementById('s2-clicks').textContent = clicks
+              mounted.update()
+              setTimeout(() => {
+                clearRegion(grid, x, y, btnW, btnH)
+                drawBox(grid, x, y, btnW, btnH, { border: 'none', fill: '░', fg: '#1a1a1a' })
+                drawText(grid, x + 1, y, label, { fg: '#2a2a2a' })
+                mounted.update()
+              }, 200)
+            })
+          }
+        }
+
+        mounted.update()
+        log(`test2: ${cols * rows * 3} event handlers registered`)
+      })()
+
+      // ── TEST 3 — large grid render time ──────────────────────────────────────────
+      ; (() => {
+        const COLS = 80, ROWS = 20
+        const grid = createGrid(COLS, ROWS)
+
+        const t0 = performance.now()
+
+        // fill with pattern
+        for (let y = 0; y < ROWS; y++) {
+          for (let x = 0; x < COLS; x++) {
+            const chars = '⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛'
+            const ci = (x * 7 + y * 13) % chars.length
+            const hue = (x * 4 + y * 8) % 360
+            setCell(grid, x, y, {
+              char: chars[ci],
+              fg: `hsl(${hue}, 40%, 25%)`
+            })
+          }
+        }
+
+        drawBox(grid, 0, 0, COLS, ROWS, { border: 'double', fg: '#333' })
+        drawText(grid, 2, 1, `${COLS}×${ROWS} = ${COLS * ROWS} cells`, { fg: '#555' })
+
+        const mounted = mountGrid(grid, document.getElementById('test3'), { fontSize: 10 })
+        mounted.update()
+
+        const ms = Math.round(performance.now() - t0)
+        document.getElementById('s3-cells').textContent = COLS * ROWS
+        document.getElementById('s3-ms').textContent = ms
+
+        // stress: redraw every 2s
+        let redraws = 0
+        mounted.loop(0.5, () => {
+          redraws++
+          for (let y = 1; y < ROWS - 1; y++) {
+            for (let x = 1; x < COLS - 1; x++) {
+              const chars = '⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏'
+              const ci = (x * 7 + y * 13 + redraws * 3) % chars.length
+              const hue = (x * 4 + y * 8 + redraws * 10) % 360
+              setCell(grid, x, y, {
+                char: chars[ci],
+                fg: `hsl(${hue}, 40%, 25%)`
+              })
+            }
+          }
+          drawText(grid, 2, 1, `redraw #${redraws} — ${COLS}×${ROWS}`, { fg: '#555' })
+          const t = performance.now()
+          mounted.update()
+          const renderMs = Math.round(performance.now() - t)
+          document.getElementById('s3-ms').textContent = renderMs
+        })
+
+        log(`test3: ${COLS * ROWS} cells initial render in ${ms}ms`)
+        if (ms < 50) log('test3: render time OK', 'pass')
+        else log(`test3: render time slow (${ms}ms)`, 'fail')
+      })()
+
+      // ── TEST 4 — multiple concurrent loops ────────────────────────────────────────
+      ; (() => {
+        const COLS = 30, ROWS = 10
+        const grid = createGrid(COLS, ROWS)
+        drawBox(grid, 0, 0, COLS, ROWS, { border: 'single', fg: '#222' })
+
+        const mounted = mountGrid(grid, document.getElementById('test4'), { fontSize: 12 })
+        mounted.update()
+
+        let totalLoops = 0
+        const spinners = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
+        // 4 independent loops at different fps
+        const configs = [
+          { fps: 60, row: 2, col: 2, label: '60fps', color: '#facc15' },
+          { fps: 30, row: 4, col: 2, label: '30fps', color: '#22c55e' },
+          { fps: 12, row: 6, col: 2, label: '12fps', color: '#3b82f6' },
+          { fps: 4, row: 8, col: 2, label: ' 4fps', color: '#ef4444' },
+        ]
+
+        for (const c of configs) {
+          let f = 0
+          let ticks = 0
+          drawText(grid, c.col, c.row, `${c.label} ⠋ ticks:00000`, { fg: c.color })
+
+          mounted.loop(c.fps, () => {
+            f = (f + 1) % spinners.length
+            ticks++
+            totalLoops++
+            clearRegion(grid, c.col, c.row, 26, 1)
+            drawText(grid, c.col, c.row,
+              `${c.label} ${spinners[f]} ticks:${ticks.toString().padStart(5, '0')}`,
+              { fg: c.color }
+            )
+            document.getElementById('s4-loops').textContent = totalLoops
+            mounted.update()
+          })
+        }
+
+        log(`test4: 4 concurrent loops (60+30+12+4 fps)`)
+      })()
+
+    log('all tests initialized — interact with test2 grid')
+      // ── TEST 5 — image quality ─────────────────────────────────────────────────
+      ; (() => {
+        const COLS = 60, ROWS = 20
+        const grid = createGrid(COLS, ROWS)
+        drawBox(grid, 0, 0, COLS, ROWS, { border: 'single', fg: '#222' })
+        drawText(grid, 2, 1, 'upload an image to test quality', { fg: '#333' })
+
+        const mounted = mountGrid(grid, document.getElementById('test5'), { fontSize: 12 })
+        mounted.update()
+
+        document.getElementById('img-upload').addEventListener('change', async (e) => {
+          const file = e.target.files[0]
+          if (!file) return
+
+          // draw image to offscreen canvas
+          const img = new Image()
+          img.src = URL.createObjectURL(file)
+          await img.decode()
+
+          const cellW = 8, cellH = 16
+          const canvasW = COLS * cellW
+          const canvasH = (ROWS - 2) * cellH
+
+          const canvas = document.createElement('canvas')
+          canvas.width = canvasW
+          canvas.height = canvasH
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, canvasW, canvasH)
+          const { data } = ctx.getImageData(0, 0, canvasW, canvasH)
+
+          // simple brightness → block char mapping
+          const charset = ' ░▒▓█'
+          for (let row = 0; row < ROWS - 2; row++) {
+            for (let col = 0; col < COLS; col++) {
+              const px = col * cellW + cellW / 2
+              const py = row * cellH + cellH / 2
+              const idx = (Math.floor(py) * canvasW + Math.floor(px)) * 4
+              const r = data[idx], g = data[idx + 1], b = data[idx + 2]
+              const luma = 0.2126 * r / 255 + 0.7152 * g / 255 + 0.0722 * b / 255
+              const ci = Math.floor(luma * (charset.length - 1))
+              const hex = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
+              setCell(grid, col, row + 1, { char: charset[ci], fg: hex })
+            }
+          }
+
+          mounted.update()
+          log('test5: image rendered (brightness mapping)')
+        })
+      })()
+  </script>
 </body>
+
 </html>
